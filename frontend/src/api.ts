@@ -25,6 +25,7 @@ export async function uploadSyllabus(file: File): Promise<BackendCourse> {
   const res = await fetch(`${BASE_URL}/api/upload-syllabus`, {
     method: "POST",
     body: formData,
+    credentials: "include",
   });
 
   if (!res.ok) {

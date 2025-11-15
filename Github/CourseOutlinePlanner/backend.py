@@ -2,19 +2,28 @@ import io
 import json
 import os
 import uuid
+import secrets
 from datetime import datetime, timedelta
 from typing import List, Optional, Dict
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import (
+    FastAPI,
+    UploadFile,
+    File,
+    HTTPException,
+    Request,
+    Response,
+)
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 from openai import OpenAI
 
 # ============== GOOGLE CALENDAR IMPORTS ==============
-from google.auth.transport.requests import Request
+from google.auth.transport.requests import Request as GoogleRequest
 from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
+from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
@@ -39,47 +48,52 @@ CAL_CLIENT_JSON = os.getenv("CAL_CLIENT_JSON") or os.path.join(
     os.getcwd(), "credentials.json"
 )
 
-# Where OAuth token will be stored (default: ./token.json)
-CAL_TOKEN_JSON = os.getenv("CAL_TOKEN_JSON", os.path.join(os.getcwd(), "token.json"))
-
 CAL_TIMEZONE = os.getenv("CAL_TIMEZONE", "America/Toronto")
-# Use "primary" or a specific calendar ID (e.g. the shared test calendar)
+# We will write to each user's "primary" calendar
 CALENDAR_ID = os.getenv("CALENDAR_ID", "primary")
 
+# Frontend origin & OAuth redirect URI
+FRONTEND_ORIGIN = os.getenv("FRONTEND_ORIGIN", "http://localhost:5173")
+OAUTH_REDIRECT_URI = os.getenv(
+    "OAUTH_REDIRECT_URI",
+    "http://localhost:8000/api/auth/google/callback",
+)
 
-def _get_google_creds() -> Credentials:
+# In-memory session storage (for demo / dev)
+# In a real app, replace this with DB storage keyed by your auth system
+SESSION_CREDS: Dict[str, str] = {}  # session_id -> creds.to_json()
+SESSION_EMAIL: Dict[str, str] = {}  # session_id -> user email
+
+
+def _get_google_creds_for_session(session_id: str) -> Credentials:
     """
-    Desktop/Installed OAuth flow. Stores token at CAL_TOKEN_JSON.
-    First time: opens a browser to authorize the app.
-    Next times: reuses/refreshes token.json automatically.
+    Get Google Credentials object for the given session.
+    Refreshes and updates in-memory JSON if needed.
     """
-    if not os.path.exists(CAL_CLIENT_JSON):
-        raise RuntimeError(f"credentials.json not found at: {CAL_CLIENT_JSON}")
+    if not session_id:
+        raise HTTPException(status_code=401, detail="Not logged in to Google")
 
-    creds: Optional[Credentials] = None
+    creds_json = SESSION_CREDS.get(session_id)
+    if not creds_json:
+        raise HTTPException(
+            status_code=401, detail="No Google credentials for this session"
+        )
 
-    if os.path.exists(CAL_TOKEN_JSON):
-        creds = Credentials.from_authorized_user_file(CAL_TOKEN_JSON, SCOPES)
+    info = json.loads(creds_json)
+    creds = Credentials.from_authorized_user_info(info, SCOPES)
 
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
+    if not creds.valid:
+        if creds.expired and creds.refresh_token:
+            creds.refresh(GoogleRequest())
+            SESSION_CREDS[session_id] = creds.to_json()
         else:
-            flow = InstalledAppFlow.from_client_secrets_file(CAL_CLIENT_JSON, SCOPES)
-            # This opens a browser window ON THE MACHINE running the backend
-            creds = flow.run_local_server(port=0)
-
-        token_dir = os.path.dirname(CAL_TOKEN_JSON)
-        if token_dir:
-            os.makedirs(token_dir, exist_ok=True)
-        with open(CAL_TOKEN_JSON, "w", encoding="utf-8") as f:
-            f.write(creds.to_json())
+            raise HTTPException(status_code=401, detail="Google credentials expired")
 
     return creds
 
 
-def _get_calendar_service():
-    creds = _get_google_creds()
+def _get_calendar_service_for_session(session_id: str):
+    creds = _get_google_creds_for_session(session_id)
     return build("calendar", "v3", credentials=creds)
 
 
@@ -144,11 +158,17 @@ def _find_existing_event_by_app_id(service, app_event_id: str):
 # FASTAPI APP + CORS
 # =========================
 
+origins = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
 app = FastAPI(title="Course Calendar Backend")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:5173", "*"],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -183,6 +203,11 @@ class Course(BaseModel):
     term: Optional[str] = None
     raw_outline_file_id: Optional[str] = None
     events: List[Event] = Field(default_factory=list)
+
+
+class AuthStatus(BaseModel):
+    connected: bool
+    email: Optional[str] = None
 
 
 COURSES: Dict[str, Course] = {}
@@ -326,6 +351,88 @@ def extract_course_data_from_pdf(pdf_bytes: bytes) -> Course:
 
 
 # =========================
+# AUTH ROUTES
+# =========================
+
+STATE_TO_SESSION: Dict[str, str] = {}
+
+@app.get("/api/auth/google/url")
+def get_google_auth_url():
+    """
+    Start Google OAuth flow.
+
+    - Generate a session_id
+    - Generate an OAuth 'state' value
+    - Remember mapping state -> session_id in memory
+    - Return the Google auth URL (Flow builds it with the state for us)
+
+    We DO NOT rely on cookies here; the cookie will be set in the callback.
+    """
+    if not os.path.exists(CAL_CLIENT_JSON):
+        raise HTTPException(
+            status_code=500, detail=f"credentials.json not found at: {CAL_CLIENT_JSON}"
+        )
+
+    # We'll associate this with the OAuth 'state'
+    session_id = secrets.token_urlsafe(32)
+
+    flow = Flow.from_client_secrets_file(
+        CAL_CLIENT_JSON,
+        scopes=SCOPES,
+        redirect_uri=OAUTH_REDIRECT_URI,
+    )
+
+    auth_url, state = flow.authorization_url(
+        access_type="offline",
+        include_granted_scopes="true",
+        prompt="consent",
+    )
+
+    # Remember which session_id is tied to this state
+    STATE_TO_SESSION[state] = session_id
+
+    return {"url": auth_url}
+
+
+@app.get("/api/auth/google/callback")
+def google_auth_callback(code: str, state: str):
+    if not os.path.exists(CAL_CLIENT_JSON):
+        raise HTTPException(
+            status_code=500, detail=f"credentials.json not found at: {CAL_CLIENT_JSON}"
+        )
+
+    global GLOBAL_CREDS_JSON, GLOBAL_EMAIL
+
+    flow = Flow.from_client_secrets_file(
+        CAL_CLIENT_JSON,
+        scopes=SCOPES,
+        redirect_uri=OAUTH_REDIRECT_URI,
+    )
+    flow.fetch_token(code=code)
+
+    creds = flow.credentials
+    GLOBAL_CREDS_JSON = creds.to_json()
+
+    # Get primary calendar id (usually the user's email)
+    try:
+        service = build("calendar", "v3", credentials=creds)
+        primary_cal = service.calendarList().get(calendarId="primary").execute()
+        cal_id = primary_cal.get("id")
+        if cal_id:
+            GLOBAL_EMAIL = cal_id
+    except Exception:
+        GLOBAL_EMAIL = None
+
+    return RedirectResponse(url=f"{FRONTEND_ORIGIN}?connected=1")
+
+@app.get("/api/auth/status", response_model=AuthStatus)
+def auth_status():
+    if not GLOBAL_CREDS_JSON:
+        return AuthStatus(connected=False)
+
+    return AuthStatus(connected=True, email=GLOBAL_EMAIL)
+
+# =========================
 # API ROUTES
 # =========================
 
@@ -375,13 +482,21 @@ async def list_all_events():
 
 
 @app.post("/api/courses/{course_id}/sync-google")
-async def sync_course_to_google(course_id: str):
+async def sync_course_to_google(course_id: str, request: Request):
+    """
+    Sync a course's events into the logged-in user's Google Calendar.
+    Uses the session_id cookie to find stored Google credentials.
+    """
     course = COURSES.get(course_id)
     if not course:
         raise HTTPException(status_code=404, detail="Course not found")
 
+    session_id = request.cookies.get("session_id")
+    if not session_id:
+        raise HTTPException(status_code=401, detail="Not connected to Google")
+
     try:
-        service = _get_calendar_service()
+        service = _get_calendar_service_for_session(session_id)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Google auth failed: {e}")
 

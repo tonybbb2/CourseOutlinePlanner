@@ -1,4 +1,4 @@
-import { useState, type ChangeEvent } from "react";
+import { useState, useEffect, type ChangeEvent } from "react";
 import {
   uploadSyllabus,
   type BackendCourse,
@@ -6,6 +6,11 @@ import {
   syncCourseToGoogle,
 } from "./api";
 import "./App.css";
+
+const BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+
+
 
 function formatDateTime(iso: string | null | undefined) {
   if (!iso) return "";
@@ -59,10 +64,41 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
+  const [connectError, setConnectError] = useState<string | null>(null);
+  const [authStatus, setAuthStatus] = useState<AuthStatus>({ connected: false });
 
-  // TODO: replace this with your real embed URL once your calendar is public
-  const googleCalendarEmbedUrl =
+  const DEMO_CAL_URL =
     "https://calendar.google.com/calendar/embed?src=a01db11882c157a9d7fbd72501759c4580ec8d4de176547a21e7e34036112b39%40group.calendar.google.com&ctz=America%2FToronto";
+
+  const [googleCalendarEmbedUrl, setGoogleCalendarEmbedUrl] = useState(DEMO_CAL_URL);
+
+useEffect(() => {
+  (async () => {
+    try {
+      const res = await fetch(`${BASE_URL}/api/auth/status`, {
+        credentials: "include",
+      });
+
+      const data = (await res.json()) as AuthStatus;
+      setAuthStatus(data);
+
+      if (data.connected) {
+        const srcCalendar = data.email ?? "primary";
+        setGoogleCalendarEmbedUrl(
+          `https://calendar.google.com/calendar/embed?src=${encodeURIComponent(
+            srcCalendar,
+          )}&ctz=America%2FToronto`,
+        );
+      } else {
+        setGoogleCalendarEmbedUrl(DEMO_CAL_URL);
+      }
+    } catch (err) {
+      console.error("Failed to load auth status", err);
+      setAuthStatus({ connected: false });
+      setGoogleCalendarEmbedUrl(DEMO_CAL_URL);
+    }
+  })();
+}, []);
 
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0] ?? null;
@@ -118,6 +154,42 @@ function App() {
     course?.events.filter((e) =>
       e.type.toLowerCase().includes("exam"),
     ).length ?? 0;
+
+const handleConnectGoogle = async () => {
+  console.log("[ConnectGoogle] clicked"); // <- check console for this
+  setConnectError(null);
+
+  try {
+    const res = await fetch(`${BASE_URL}/api/auth/google/url`, {
+      method: "GET",
+      credentials: "include",
+    });
+
+    console.log("[ConnectGoogle] response status:", res.status);
+
+    if (!res.ok) {
+      const text = await res.text();
+      console.error("[ConnectGoogle] backend error:", text);
+      setConnectError(`Backend error: ${text}`);
+      return;
+    }
+
+    const data = await res.json();
+    console.log("[ConnectGoogle] redirecting to:", data.url);
+
+    if (!data.url) {
+      setConnectError("No auth URL returned from server.");
+      return;
+    }
+
+    // jump to Google OAuth consent
+    window.location.href = data.url;
+  } catch (err) {
+    console.error("[ConnectGoogle] fetch failed:", err);
+    setConnectError(String(err));
+  }
+};
+
 
   return (
     <div className="app-root">
@@ -263,28 +335,49 @@ function App() {
               <div>
                 <h2 className="section-title">Google Calendar view</h2>
                 <p className="section-description">
-                  When you sync a course, its events are added to the connected
-                  calendar below. Use Google’s controls to switch between week,
-                  month, or agenda views.
+                  {authStatus.connected
+                    ? "This is your own Google Calendar. Any synced course will appear here alongside your other events."
+                    : "We show a demo calendar by default. Connect your Google account to see your real schedule."}
                 </p>
               </div>
             </div>
 
-            <div className="calendar-frame">
+            <div
+              className={
+                "calendar-frame" +
+                (authStatus.connected ? "" : " calendar-frame--blurred")
+              }
+            >
               <iframe
                 src={googleCalendarEmbedUrl}
                 title="Google Calendar"
                 frameBorder="0"
                 scrolling="no"
               />
+
+  {!authStatus.connected && (
+    <div className="calendar-overlay">
+      <h3>Connect your Google Calendar</h3>
+      <p>
+        Sign in with Google so we can sync your course events to your own
+        calendar and display them here.
+      </p>
+      <button
+        onClick={handleConnectGoogle}
+        className="btn btn--primary"
+        type="button"
+      >
+        Connect Google Calendar
+      </button>
+    </div>
+  )}
             </div>
 
-            <p className="calendar-hint">
-              Tip: If you don’t see events yet, make sure you’ve synced at
-              least one course and that the{" "}
-              <strong>CourseOutlinePlanner Demo</strong> calendar is visible in
-              Google Calendar.
-            </p>
+<p className="section-description">
+  {authStatus.connected
+    ? "This is your Google Calendar. Any synced course will appear alongside your other events."
+    : "We show a demo calendar by default. Connect your Google account to see your real schedule."}
+</p>
           </div>
         </aside>
       </div>
