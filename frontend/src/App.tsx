@@ -1,39 +1,15 @@
 import { useState } from "react";
-import { uploadSyllabus, type BackendCourse, type BackendEvent, syncCourseToGoogle } from "./api";
+import { uploadSyllabus, type BackendCourse, syncCourseToGoogle } from "./api";
+import { FileUpload } from "./components/FileUpload";
+import { ParsedEvents } from "./components/ParsedEvents";
+import { SyncButton } from "./components/SyncButton";
+import { GoogleCalendarFrame } from "./components/GoogleCalendarFrame";
+import { Toast, ToastType } from "./components/Toast";
+import "./App.css";
 
-function formatDateTime(iso: string | null | undefined) {
-  if (!iso) return "";
-  const d = new Date(iso);
-  return d.toLocaleString();
-}
-
-function EventsTable({ events }: { events: BackendEvent[] }) {
-  if (!events.length) return <p>No events parsed yet.</p>;
-
-  return (
-    <table style={{ width: "100%", borderCollapse: "collapse", marginTop: "1rem" }}>
-      <thead>
-        <tr>
-          <th style={{ borderBottom: "1px solid #ccc", textAlign: "left" }}>Title</th>
-          <th style={{ borderBottom: "1px solid #ccc", textAlign: "left" }}>Type</th>
-          <th style={{ borderBottom: "1px solid #ccc", textAlign: "left" }}>Start</th>
-          <th style={{ borderBottom: "1px solid #ccc", textAlign: "left" }}>End</th>
-          <th style={{ borderBottom: "1px solid #ccc", textAlign: "left" }}>Location</th>
-        </tr>
-      </thead>
-      <tbody>
-        {events.map((ev) => (
-          <tr key={ev.id}>
-            <td style={{ padding: "4px 8px" }}>{ev.title}</td>
-            <td style={{ padding: "4px 8px" }}>{ev.type}</td>
-            <td style={{ padding: "4px 8px" }}>{formatDateTime(ev.start)}</td>
-            <td style={{ padding: "4px 8px" }}>{formatDateTime(ev.end)}</td>
-            <td style={{ padding: "4px 8px" }}>{ev.location ?? ""}</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  );
+interface ToastState {
+  message: string;
+  type: ToastType;
 }
 
 function App() {
@@ -41,123 +17,136 @@ function App() {
   const [course, setCourse] = useState<BackendCourse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [toast, setToast] = useState<ToastState | null>(null);
 
-  // TODO: replace this with your real embed URL once your calendar is public
   const googleCalendarEmbedUrl =
     "https://calendar.google.com/calendar/embed?src=a01db11882c157a9d7fbd72501759c4580ec8d4de176547a21e7e34036112b39%40group.calendar.google.com&ctz=America%2FToronto";
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0] ?? null;
+  const handleFileSelect = async (file: File) => {
     setSelectedFile(file);
-  };
-
-  const handleUpload = async () => {
-    if (!selectedFile) return;
     setLoading(true);
     setError(null);
 
     try {
-      const result = await uploadSyllabus(selectedFile);
+      const result = await uploadSyllabus(file);
       setCourse(result);
+      setToast({
+        message: "Course outline parsed successfully!",
+        type: "success",
+      });
     } catch (err: any) {
       console.error(err);
-      setError(err.message ?? "Upload failed");
+      const errorMsg = err.message ?? "Upload failed";
+      setError(errorMsg);
+      setToast({
+        message: errorMsg,
+        type: "error",
+      });
     } finally {
       setLoading(false);
     }
   };
 
+  const handleSync = async (courseId: string) => {
+    try {
+      await syncCourseToGoogle(courseId);
+      setToast({
+        message: "Successfully synced to Google Calendar!",
+        type: "success",
+      });
+    } catch (err: any) {
+      console.error(err);
+      setToast({
+        message: err.message ?? "Failed to sync",
+        type: "error",
+      });
+      throw err;
+    }
+  };
+
   return (
-    <div
-      style={{
-        display: "flex",
-        minHeight: "100vh",
-        fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
-      }}
-    >
-      {/* Left side: controls + parsed events */}
-      <div style={{ flex: 1, padding: "1.5rem", borderRight: "1px solid #ddd" }}>
-        <h1>Planner</h1>
-
-        <section style={{ marginTop: "1rem", marginBottom: "1.5rem" }}>
-          <h2>1. Upload course outline PDF</h2>
-          <input
-            type="file"
-            accept="application/pdf"
-            onChange={handleFileChange}
-            style={{ marginTop: "0.5rem" }}
-          />
-          <div style={{ marginTop: "0.5rem" }}>
-            <button
-              onClick={handleUpload}
-              disabled={!selectedFile || loading}
-              style={{
-                padding: "0.5rem 1rem",
-                cursor: selectedFile && !loading ? "pointer" : "not-allowed",
-              }}
-            >
-              {loading ? "Processing..." : "Upload & Parse"}
-            </button>
+    <div className="app">
+      <header className="app-header">
+        <div className="header-content">
+          <div className="header-left">
+            <div className="logo">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                <line x1="16" y1="2" x2="16" y2="6" />
+                <line x1="8" y1="2" x2="8" y2="6" />
+                <line x1="3" y1="10" x2="21" y2="10" />
+              </svg>
+              <h1>Course Planner</h1>
+            </div>
+            <p className="header-subtitle">Transform your course outline into a smart calendar</p>
           </div>
-          {error && <p style={{ color: "red", marginTop: "0.5rem" }}>{error}</p>}
-        </section>
+        </div>
+      </header>
 
-        <section>
-  <h2>2. Parsed events</h2>
-  {course ? (
-    <>
-      <p>
-        <strong>{course.code}</strong> — {course.name} ({course.term})
-      </p>
+      <main className="app-main">
+        <div className="main-grid">
+          <div className="left-panel">
+            <section className="section">
+              <div className="section-header">
+                <div className="step-badge">1</div>
+                <h2>Upload Course Outline</h2>
+              </div>
+              <FileUpload
+                onFileSelect={handleFileSelect}
+                loading={loading}
+                error={error}
+              />
+            </section>
 
-      <button
-        onClick={async () => {
-          try {
-            await syncCourseToGoogle(course.id);
-            alert("Synced to Google Calendar!");
-          } catch (err: any) {
-            console.error(err);
-            alert("Failed to sync: " + (err.message ?? String(err)));
-          }
-        }}
-        style={{ marginBottom: "0.75rem", padding: "0.4rem 0.9rem" }}
-      >
-        Sync this course to Google Calendar
-      </button>
+            <section className="section">
+              <div className="section-header">
+                <div className="step-badge">2</div>
+                <div className="section-header-content">
+                  <h2>Course Events</h2>
+                  {course && (
+                    <div className="course-info">
+                      <span className="course-code">{course.code}</span>
+                      <span className="course-name">{course.name}</span>
+                      <span className="course-term">{course.term}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
 
-      <EventsTable events={course.events} />
-    </>
-  ) : (
-    <p>No course uploaded yet.</p>
-  )}
-</section>
-      </div>
+              {course && (
+                <div className="section-actions">
+                  <SyncButton courseId={course.id} onSync={handleSync} />
+                  <div className="events-count">
+                    {course.events.length} {course.events.length === 1 ? "event" : "events"} found
+                  </div>
+                </div>
+              )}
 
-      {/* Right side: Google Calendar embed */}
-      <div style={{ flex: 1.2, padding: "1.5rem" }}>
-        <h2>3. Google Calendar view</h2>
-        <p style={{ fontSize: "0.9rem", color: "#555" }}>
-          This is an embedded Google Calendar. Your backend script (or future API) will create
-          events in this calendar using credentials.json / token.json.
-        </p>
-        <div
-          style={{
-            marginTop: "0.5rem",
-            border: "1px solid #ccc",
-            borderRadius: "4px",
-            overflow: "hidden",
-            height: "600px",
-          }}
-        >
-          <iframe
-            src={googleCalendarEmbedUrl}
-            style={{ border: 0, width: "100%", height: "100%" }}
-            frameBorder="0"
-            scrolling="no"
-            title="Google Calendar"
+              <ParsedEvents events={course?.events ?? []} />
+            </section>
+          </div>
+
+          <div className="right-panel">
+            <section className="section">
+              <div className="section-header">
+                <div className="step-badge">3</div>
+                <h2>Calendar View</h2>
+              </div>
+              <GoogleCalendarFrame embedUrl={googleCalendarEmbedUrl} />
+            </section>
+          </div>
+        </div>
+      </main>
+
+      {toast && (
+        <div className="toast-container">
+          <Toast
+            message={toast.message}
+            type={toast.type}
+            onClose={() => setToast(null)}
           />
         </div>
-      </div>
+      )}
     </div>
   );
 }
