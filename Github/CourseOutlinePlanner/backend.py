@@ -2,7 +2,7 @@ import io
 import json
 import os
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Optional, Dict
 
 from dotenv import load_dotenv
@@ -21,6 +21,8 @@ from googleapiclient.errors import HttpError
 # =========================
 # ENV & OPENAI CLIENT
 # =========================
+
+# Load API key from apikey.env (same folder as backend.py)
 load_dotenv("apikey.env")
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -31,43 +33,65 @@ client = OpenAI(api_key=OPENAI_API_KEY)
 
 # ============== GOOGLE CALENDAR CONFIG =================
 SCOPES = ["https://www.googleapis.com/auth/calendar"]
-CAL_CLIENT_JSON = os.getenv("CAL_CLIENT_JSON")  # full path to credentials.json
+
+# If CAL_CLIENT_JSON is not set, default to ./credentials.json
+CAL_CLIENT_JSON = os.getenv("CAL_CLIENT_JSON") or os.path.join(
+    os.getcwd(), "credentials.json"
+)
+
+# Where OAuth token will be stored (default: ./token.json)
 CAL_TOKEN_JSON = os.getenv("CAL_TOKEN_JSON", os.path.join(os.getcwd(), "token.json"))
+
 CAL_TIMEZONE = os.getenv("CAL_TIMEZONE", "America/Toronto")
-CALENDAR_ID = "primary"
+# Use "primary" or a specific calendar ID (e.g. the shared test calendar)
+CALENDAR_ID = os.getenv("CALENDAR_ID", "primary")
+
 
 def _get_google_creds() -> Credentials:
     """
     Desktop/Installed OAuth flow. Stores token at CAL_TOKEN_JSON.
+    First time: opens a browser to authorize the app.
+    Next times: reuses/refreshes token.json automatically.
     """
-    creds = None
-    if CAL_CLIENT_JSON is None or not os.path.exists(CAL_CLIENT_JSON):
-        raise RuntimeError("CAL_CLIENT_JSON not set or file not found")
+    if not os.path.exists(CAL_CLIENT_JSON):
+        raise RuntimeError(f"credentials.json not found at: {CAL_CLIENT_JSON}")
+
+    creds: Optional[Credentials] = None
+
     if os.path.exists(CAL_TOKEN_JSON):
         creds = Credentials.from_authorized_user_file(CAL_TOKEN_JSON, SCOPES)
+
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
-            # Opens a browser on the machine running this backend
             flow = InstalledAppFlow.from_client_secrets_file(CAL_CLIENT_JSON, SCOPES)
+            # This opens a browser window ON THE MACHINE running the backend
             creds = flow.run_local_server(port=0)
-        os.makedirs(os.path.dirname(CAL_TOKEN_JSON), exist_ok=True)
-        with open(CAL_TOKEN_JSON, "w") as f:
+
+        token_dir = os.path.dirname(CAL_TOKEN_JSON)
+        if token_dir:
+            os.makedirs(token_dir, exist_ok=True)
+        with open(CAL_TOKEN_JSON, "w", encoding="utf-8") as f:
             f.write(creds.to_json())
+
     return creds
+
 
 def _get_calendar_service():
     creds = _get_google_creds()
     return build("calendar", "v3", credentials=creds)
 
+
 def _event_to_google_body(ev: "Event") -> dict:
     """
     Map your Event model → Google Calendar event payload.
-    Uses private extendedProperties to track source & id for idempotency.
+    Uses private extendedProperties to track source & app_event_id
+    so we can avoid duplicates / update in place.
     """
     start_dt = ev.start.isoformat()
-    body = {
+
+    body: Dict[str, object] = {
         "summary": ev.title,
         "location": ev.location or None,
         "description": f"{ev.type.upper()} (Course ID: {ev.course_id})",
@@ -81,37 +105,45 @@ def _event_to_google_body(ev: "Event") -> dict:
         },
         "colorId": "6" if ev.type in {"midterm", "final", "test", "quiz"} else None,
     }
+
+    # End time: use provided end or default to +1h
     if ev.end:
         body["end"] = {"dateTime": ev.end.isoformat(), "timeZone": CAL_TIMEZONE}
     else:
-        # If no end provided, default 1 hour after start (optional)
-        # You can remove this if you prefer to require end times
-        try:
-            from datetime import timedelta
-            body["end"] = {"dateTime": (ev.start + timedelta(hours=1)).isoformat(), "timeZone": CAL_TIMEZONE}
-        except Exception:
-            pass
+        body["end"] = {
+            "dateTime": (ev.start + timedelta(hours=1)).isoformat(),
+            "timeZone": CAL_TIMEZONE,
+        }
+
+    # Strip None values
     return {k: v for k, v in body.items() if v is not None}
+
 
 def _find_existing_event_by_app_id(service, app_event_id: str):
     """
     Look up events with our private extended property to avoid duplicates.
     """
     try:
-        res = service.events().list(
-            calendarId=CALENDAR_ID,
-            privateExtendedProperty=f"app_event_id={app_event_id}",
-            maxResults=2,
-            singleEvents=True,
-        ).execute()
+        res = (
+            service.events()
+            .list(
+                calendarId=CALENDAR_ID,
+                privateExtendedProperty=f"app_event_id={app_event_id}",
+                maxResults=2,
+                singleEvents=True,
+            )
+            .execute()
+        )
         items = res.get("items", [])
         return items[0] if items else None
     except HttpError:
         return None
 
+
 # =========================
 # FASTAPI APP + CORS
 # =========================
+
 app = FastAPI(title="Course Calendar Backend")
 
 app.add_middleware(
@@ -125,16 +157,24 @@ app.add_middleware(
 # =========================
 # DATA MODELS
 # =========================
+
+
 class Event(BaseModel):
     id: str
     course_id: str
     title: str
-    type: str = Field(description="lecture, lab, tutorial, midterm, final, assignment_due, holiday, study_block, other")
+    type: str = Field(
+        description=(
+            "lecture, lab, tutorial, midterm, final, "
+            "assignment_due, holiday, study_block, other"
+        )
+    )
     start: datetime
     end: Optional[datetime] = None
     location: Optional[str] = None
     notes: Optional[str] = None
     source_page: Optional[int] = None
+
 
 class Course(BaseModel):
     id: str
@@ -144,12 +184,14 @@ class Course(BaseModel):
     raw_outline_file_id: Optional[str] = None
     events: List[Event] = Field(default_factory=list)
 
+
 COURSES: Dict[str, Course] = {}
 EVENTS: Dict[str, Event] = {}
 
 # =========================
 # PROMPTS
 # =========================
+
 SYSTEM_PROMPT = """
 You read university course outline PDFs and extract ONLY the information needed
 for a student calendar app.
@@ -183,9 +225,6 @@ Interpretation rules:
 Formatting: return only the JSON object; no notes/markdown.
 """
 
-
-
-
 USER_PROMPT = """
 Read this course outline and extract ONLY:
 
@@ -201,6 +240,8 @@ Return ONLY the JSON object.
 # =========================
 # UTIL: CALL OPENAI ON PDF
 # =========================
+
+
 def extract_course_data_from_pdf(pdf_bytes: bytes) -> Course:
     # 1) Upload PDF for use by the model
     pdf_file = client.files.create(
@@ -212,19 +253,22 @@ def extract_course_data_from_pdf(pdf_bytes: bytes) -> Course:
     response = client.responses.create(
         model="gpt-5.1",
         instructions=SYSTEM_PROMPT,
-        input=[{
-            "role": "user",
-            "content": [
-                {"type": "input_file", "file_id": pdf_file.id},
-                {"type": "input_text", "text": USER_PROMPT},
-            ],
-        }],
+        input=[
+            {
+                "role": "user",
+                "content": [
+                    {"type": "input_file", "file_id": pdf_file.id},
+                    {"type": "input_text", "text": USER_PROMPT},
+                ],
+            }
+        ],
         max_output_tokens=4000,
     )
 
     raw_text = response.output_text
     if not raw_text:
         raise RuntimeError("No text output from OpenAI response.")
+
     text = raw_text.strip()
     if text.startswith("```"):
         text = text.split("```", 2)[1]
@@ -249,6 +293,7 @@ def extract_course_data_from_pdf(pdf_bytes: bytes) -> Course:
         date_str = ev.get("date")
         if not date_str:
             continue
+
         start_time = ev.get("start_time")
         end_time = ev.get("end_time")
 
@@ -257,7 +302,9 @@ def extract_course_data_from_pdf(pdf_bytes: bytes) -> Course:
         else:
             start_dt = datetime.fromisoformat(f"{date_str}T00:00:00")
 
-        end_dt = datetime.fromisoformat(f"{date_str}T{end_time}:00") if end_time else None
+        end_dt = (
+            datetime.fromisoformat(f"{date_str}T{end_time}:00") if end_time else None
+        )
 
         e = Event(
             id=str(uuid.uuid4()),
@@ -274,26 +321,34 @@ def extract_course_data_from_pdf(pdf_bytes: bytes) -> Course:
         course.events.append(e)
         EVENTS[e.id] = e
 
+    COURSES[course.id] = course
     return course
+
 
 # =========================
 # API ROUTES
 # =========================
+
+
 @app.post("/api/upload-syllabus", response_model=Course)
 async def upload_syllabus(file: UploadFile = File(...)):
     if file.content_type not in ["application/pdf"]:
         raise HTTPException(status_code=400, detail="Please upload a PDF file")
+
     pdf_bytes = await file.read()
+
     try:
         course = extract_course_data_from_pdf(pdf_bytes)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-    COURSES[course.id] = course
+
     return course
+
 
 @app.get("/api/courses", response_model=List[Course])
 async def list_courses():
     return list(COURSES.values())
+
 
 @app.get("/api/courses/{course_id}", response_model=Course)
 async def get_course(course_id: str):
@@ -302,6 +357,7 @@ async def get_course(course_id: str):
         raise HTTPException(status_code=404, detail="Course not found")
     return course
 
+
 @app.get("/api/courses/{course_id}/events", response_model=List[Event])
 async def get_course_events(course_id: str):
     course = COURSES.get(course_id)
@@ -309,11 +365,15 @@ async def get_course_events(course_id: str):
         raise HTTPException(status_code=404, detail="Course not found")
     return course.events
 
+
 @app.get("/api/events", response_model=List[Event])
 async def list_all_events():
     return list(EVENTS.values())
 
-# ============== NEW: SYNC A COURSE INTO GOOGLE CALENDAR ==============
+
+# ============== SYNC A COURSE INTO GOOGLE CALENDAR ==============
+
+
 @app.post("/api/courses/{course_id}/sync-google")
 async def sync_course_to_google(course_id: str):
     course = COURSES.get(course_id)
@@ -331,16 +391,38 @@ async def sync_course_to_google(course_id: str):
         try:
             existing = _find_existing_event_by_app_id(service, ev.id)
             if existing:
-                updated = service.events().update(
-                    calendarId=CALENDAR_ID, eventId=existing["id"], body=body
-                ).execute()
-                results.append({"event_id": ev.id, "status": "updated", "gcal_id": updated.get("id")})
+                updated = (
+                    service.events()
+                    .update(
+                        calendarId=CALENDAR_ID,
+                        eventId=existing["id"],
+                        body=body,
+                    )
+                    .execute()
+                )
+                results.append(
+                    {
+                        "event_id": ev.id,
+                        "status": "updated",
+                        "gcal_id": updated.get("id"),
+                    }
+                )
             else:
-                created = service.events().insert(
-                    calendarId=CALENDAR_ID, body=body
-                ).execute()
-                results.append({"event_id": ev.id, "status": "created", "gcal_id": created.get("id")})
+                created = (
+                    service.events()
+                    .insert(calendarId=CALENDAR_ID, body=body)
+                    .execute()
+                )
+                results.append(
+                    {
+                        "event_id": ev.id,
+                        "status": "created",
+                        "gcal_id": created.get("id"),
+                    }
+                )
         except HttpError as he:
-            results.append({"event_id": ev.id, "status": "error", "error": str(he)})
+            results.append(
+                {"event_id": ev.id, "status": "error", "error": str(he)}
+            )
 
     return {"course_id": course_id, "synced": results}
