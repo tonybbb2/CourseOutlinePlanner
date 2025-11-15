@@ -130,14 +130,19 @@ Formatting:
 - Do not include any explanations, markdown, or extra text outside the JSON.
 """
 
-USER_PROMPT = """
-Read this course outline and extract ONLY what is needed for a student calendar:
-- course_name, course_code, term
-- weekly class / lab / tutorial time slots (ONE event per pattern, using the first applicable date)
-- midterms, final exams, quizzes, and tests with their dates and times.
 
-Ignore administrative deadlines, SPÉSH dates, add/drop deadlines, fee deadlines, and generic holidays.
-Return ONLY the JSON object as described in the instructions.
+
+
+USER_PROMPT = """
+Read this course outline and extract ONLY:
+
+- course_name, course_code, term
+- weekly class / lab / tutorial time slots as pattern objects (class_patterns)
+- midterms, finals, quizzes, and tests as one-off assessment events (assessments)
+
+Use the JSON schema described in the instructions.
+Do not include administrative deadlines or generic holidays.
+Return ONLY the JSON object.
 """
 
 # =========================

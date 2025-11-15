@@ -1,7 +1,7 @@
 import requests
 import json
 
-PDF_PATH = "plan.pdf"          # <-- your input PDF
+PDF_PATH = "COMP228-CourseOutlineF2025.pdf"          # <-- your input PDF
 OUTPUT_PATH = "course_data.json"   # <-- output JSON file
 
 url = "http://127.0.0.1:8000/api/upload-syllabus"
