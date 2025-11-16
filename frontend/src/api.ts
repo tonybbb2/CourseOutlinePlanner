@@ -69,3 +69,28 @@ export async function disconnectGoogle(): Promise<void> {
     throw new Error(text || "Failed to disconnect");
   }
 }
+
+export type ChatMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
+
+export async function chatWithCalendar(
+  messages: ChatMessage[]
+): Promise<string> {
+  const res = await fetch(`${BASE_URL}/api/chat/calendar`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ messages }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Chat failed: ${text}`);
+  }
+
+  const data = await res.json();
+  return data.reply as string;
+}

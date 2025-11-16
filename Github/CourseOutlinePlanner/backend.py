@@ -4,7 +4,7 @@ import os
 import uuid
 import secrets
 from datetime import datetime, timedelta
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Any
 
 from dotenv import load_dotenv
 from fastapi import (
@@ -234,6 +234,15 @@ class AuthStatus(BaseModel):
     connected: bool
     email: Optional[str] = None
 
+class ChatMessageIn(BaseModel):
+    role: str  # "user" or "assistant"
+    content: str
+
+
+class CalendarChatRequest(BaseModel):
+    messages: List[ChatMessageIn]
+
+
 
 COURSES: Dict[str, Course] = {}
 EVENTS: Dict[str, Event] = {}
@@ -286,6 +295,277 @@ Use the JSON schema described in the instructions.
 Do not include administrative deadlines or generic holidays.
 Return ONLY the JSON object.
 """
+
+CAL_CHAT_SYSTEM_PROMPT = """
+You are Calendar Assistant, an AI agent integrated into a university student’s
+Google Calendar. You can list, search, create, update, and delete events in the
+user’s calendar by calling the provided functions.
+
+Your job:
+- Understand natural language requests about course schedules, study blocks,
+  reminders, exam periods, and general event management.
+- Convert user requests into precise calendar operations using the available tools.
+- Always clarify anything ambiguous before calling a tool.
+
+============================================================
+AVAILABLE ACTIONS (TOOLS)
+============================================================
+
+You can call the following functions:
+
+1. list_calendar_events  
+   - Retrieve events between two dates, optionally searching by keywords.
+
+2. delete_calendar_event  
+   - Permanently remove a calendar event.
+
+3. update_calendar_event_time  
+   - Change an event’s start/end time.
+
+4. create_calendar_event  
+   - Add new events to the user's Google Calendar.
+   - Supports:
+       • one-time events  
+       • recurring events via RFC 5545 RRULE strings
+         (e.g., "RRULE:FREQ=WEEKLY;COUNT=4")
+
+============================================================
+GENERAL BEHAVIOR RULES
+============================================================
+
+- ALWAYS think step-by-step.
+- NEVER assume event IDs — only use IDs returned from a list or tool call.
+- When the user names a class (e.g., “COMP 228 lecture”), you MUST:
+    1. Search for events using list_calendar_events and keywords.
+    2. Interpret dates correctly.
+    3. Only operate on events you find.
+
+- If you need more info:
+    → Ask the user BEFORE calling a tool.
+
+- If the user references a date without a year:
+    → Assume the year based on nearby context or future events, or ask for confirmation
+      if multiple interpretations are plausible.
+
+============================================================
+DATE INTERPRETATION RULES
+============================================================
+
+- If the user says “November 17”, interpret as:
+    - The next upcoming November 17 relative to their calendar, OR
+    - If unsure, ask for the year.
+
+- If the user provides a range:
+    Example: “cancel all lectures from November 15 to December 3”
+    → Convert to inclusive ISO datetimes:
+         start: YYYY-11-15T00:00:00
+         end:   YYYY-12-03T23:59:59
+
+- If time is missing, choose reasonable defaults:
+    - start_time default: 09:00
+    - end_time default:   start_time + 1 hour
+  (But explain this to the user.)
+
+============================================================
+RECURRING EVENTS
+============================================================
+
+You may create recurring events when requested:
+
+Examples:
+- “every Tuesday at 3pm until finals”
+- “repeat weekly for 4 weeks”
+- “every Monday and Wednesday until December 10”
+
+Rules:
+- Weekly recurrences use RRULE:FREQ=WEEKLY.
+- Use COUNT or UNTIL (YYYYMMDD) when possible.
+- If recurrence details are incomplete:
+    → Ask follow-up questions.
+
+============================================================
+AFTER A TOOL CALL
+============================================================
+
+When you call a tool:
+- Wait for the tool result.
+- If result has: {"ok": false, "error": "..."}  
+    → DO NOT say “done”.  
+    → Explain the error and suggest the next step.
+
+- After a successful result:
+    → Summarize clearly what was done:
+      Example: “I deleted 2 COMP 228 lecture events on Nov 17 and Nov 24.”
+
+============================================================
+EXAMPLES OF USER REQUESTS YOU MUST HANDLE
+============================================================
+
+- “Cancel my COMP 228 lecture next Wednesday.”
+- “Move tomorrow’s midterm back by 1 hour.”
+- “Add a study session this Sunday from 3–5pm.”
+- “Create a recurring weekly study block every Saturday until December 1.”
+- “Delete all COMP 248 labs in April.”
+- “Reschedule all my lectures next week to one hour later.”
+
+============================================================
+ABSOLUTE RULES (NEVER BREAK THESE)
+============================================================
+
+1. Never invent event information.
+2. Never modify events without confirming the correct ones.
+3. Never assume the calendar contains events — always list first.
+4. Never claim success unless the tool result confirms it.
+5. If dates or event names are ambiguous, ask questions first.
+
+============================================================
+SUMMARY
+============================================================
+
+Your role is to:
+- Interpret natural language calendar requests accurately.
+- Reliably manipulate Google Calendar using the defined tools.
+- Confirm all actions.
+- Ask when unsure.
+- NEVER hallucinate event IDs, dates, or times.
+
+Always respond in a helpful, professional, and concise tone.
+"""
+
+
+
+CAL_CHAT_TOOLS: List[Dict[str, Any]] = [
+    {
+        "type": "function",
+        "function": {
+            "name": "list_calendar_events",
+            "description": (
+                "List calendar events between two ISO datetimes. "
+                "Use this to find specific events the user is referring to "
+                "(e.g. certain course, specific weeks, etc.)."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "date_from": {
+                        "type": "string",
+                        "description": "Start of the search window (ISO 8601).",
+                    },
+                    "date_to": {
+                        "type": "string",
+                        "description": "End of the search window (ISO 8601).",
+                    },
+                    "search_text": {
+                        "type": "string",
+                        "description": (
+                            "Optional text to match against summary/description/"
+                            "location (e.g. course code, 'lecture', 'midterm')."
+                        ),
+                    },
+                    "max_results": {
+                        "type": "integer",
+                        "description": "Maximum number of events to return.",
+                        "default": 50,
+                    },
+                },
+                "required": ["date_from", "date_to"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "delete_calendar_event",
+            "description": "Delete a calendar event by its event_id.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "event_id": {
+                        "type": "string",
+                        "description": "The event's Google Calendar id.",
+                    }
+                },
+                "required": ["event_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "update_calendar_event_time",
+            "description": (
+                "Move or reschedule an event by providing new start and end "
+                "datetime values in ISO 8601 format."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "event_id": {
+                        "type": "string",
+                        "description": "The event's Google Calendar id.",
+                    },
+                    "new_start_iso": {
+                        "type": "string",
+                        "description": "New start datetime (ISO 8601).",
+                    },
+                    "new_end_iso": {
+                        "type": "string",
+                        "description": "New end datetime (ISO 8601).",
+                    },
+                },
+                "required": ["event_id", "new_start_iso", "new_end_iso"],
+            },
+        },
+    },
+
+    {
+        "type": "function",
+        "function": {
+            "name": "create_calendar_event",
+            "description": (
+                "Create a new event in the user's Google Calendar. "
+                "Use this for things like study sessions, office hours, "
+                "one-off reminders, or new recurring classes."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "title": {
+                        "type": "string",
+                        "description": "Short summary of the event (e.g. 'COMP 228 Study Session').",
+                    },
+                    "start_iso": {
+                        "type": "string",
+                        "description": "Start datetime in ISO 8601 format (e.g. '2025-11-17T13:00:00').",
+                    },
+                    "end_iso": {
+                        "type": "string",
+                        "description": "End datetime in ISO 8601 format.",
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Optional longer description or notes.",
+                    },
+                    "location": {
+                        "type": "string",
+                        "description": "Optional location, e.g. 'H-110' or 'Library 7th floor'.",
+                    },
+                    "recurrence_rule": {
+                        "type": "string",
+                        "description": (
+                            "Optional RFC 5545 RRULE string for recurring events. "
+                            "Example: 'RRULE:FREQ=WEEKLY;COUNT=4' for four weekly sessions."
+                        ),
+                    },
+                },
+                "required": ["title", "start_iso", "end_iso"],
+            },
+        },
+    },
+
+]
+
+
 
 # =========================
 # UTIL: CALL OPENAI ON PDF
@@ -529,6 +809,113 @@ async def get_course_events(course_id: str):
 async def list_all_events():
     return list(EVENTS.values())
 
+@app.post("/api/chat/calendar")
+async def chat_with_calendar(req: CalendarChatRequest):
+    """
+    Conversational endpoint that lets the user manage their Google Calendar
+    via natural language.
+
+    Uses OpenAI tools under the hood to list/delete/move events.
+    """
+    # Make sure user is connected to Google Calendar
+    try:
+        _get_calendar_service()
+    except HTTPException as e:
+        # Bubble up 401 etc.
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Google auth failed: {e}")
+
+    # Build the messages list for OpenAI
+    messages = [{"role": "system", "content": CAL_CHAT_SYSTEM_PROMPT}]
+    for m in req.messages:
+        # Only allow user/assistant roles from client
+        if m.role not in ("user", "assistant"):
+            continue
+        messages.append({"role": m.role, "content": m.content})
+
+    # First call: let the model decide if it needs tools
+    first = client.chat.completions.create(
+        model="gpt-4.1-mini",
+        messages=messages,
+        tools=CAL_CHAT_TOOLS,
+        tool_choice="auto",
+    )
+
+    choice = first.choices[0]
+    msg = choice.message
+
+    # If no tool calls, we are done
+    tool_calls = msg.tool_calls or []
+    if not tool_calls:
+        return {"reply": msg.content}
+
+    # --- Handle one round of tool calls (good enough for this use case) ---
+
+    # Convert tool calls to a simple list of dicts
+    tool_call_dicts = []
+    tool_results_messages = []
+
+    for tc in tool_calls:
+        fn_name = tc.function.name
+        raw_args = tc.function.arguments or "{}"
+        try:
+            parsed_args = json.loads(raw_args)
+        except json.JSONDecodeError:
+            parsed_args = {}
+
+        impl = CAL_CHAT_TOOL_IMPLS.get(fn_name)
+        if impl is None:
+            result = {"error": f"Unknown tool {fn_name}"}
+        else:
+            try:
+                result = impl(**parsed_args)
+            except HTTPException as he:
+                # Preserve HTTPException detail, but return as data to the model
+                result = {"error": f"HTTPException: {he.detail}"}
+            except Exception as e:
+                result = {"error": f"Tool {fn_name} failed: {e}"}
+
+        # For the second call, we need both the assistant tool call message
+        # and the tool's output message.
+        tool_call_dicts.append(
+            {
+                "id": tc.id,
+                "type": tc.type,
+                "function": {
+                    "name": fn_name,
+                    "arguments": raw_args,
+                },
+            }
+        )
+        tool_results_messages.append(
+            {
+                "role": "tool",
+                "tool_call_id": tc.id,
+                "name": fn_name,
+                "content": json.dumps(result),
+            }
+        )
+
+    # Second call: give the model the tool results so it can explain what happened
+    followup_messages: List[Dict[str, Any]] = messages + [
+        {
+            "role": "assistant",
+            "content": msg.content or "",
+            "tool_calls": tool_call_dicts,
+        }
+    ]
+    followup_messages.extend(tool_results_messages)
+
+    second = client.chat.completions.create(
+        model="gpt-4.1-mini",
+        messages=followup_messages,
+    )
+
+    final_msg = second.choices[0].message
+    return {"reply": final_msg.content}
+
+
 
 # ============== SYNC A COURSE INTO GOOGLE CALENDAR ==============
 
@@ -727,4 +1114,210 @@ def _get_calendar_service():
     """
     creds = _get_google_creds_single_user()
     return build("calendar", "v3", credentials=creds)
+
+def _get_calendar_service_and_target() -> tuple:
+    """
+    Convenience helper to get (service, calendar_id) for the current user.
+
+    Uses the logged-in user's calendar if available (GLOBAL_CALENDAR_ID),
+    otherwise falls back to CALENDAR_ID from env (usually 'primary').
+    """
+    service = _get_calendar_service()
+    target_calendar_id = GLOBAL_CALENDAR_ID or CALENDAR_ID
+    return service, target_calendar_id
+
+def tool_list_calendar_events(
+    *,
+    date_from: str,
+    date_to: str,
+    search_text: Optional[str] = None,
+    max_results: int = 250,
+):
+    """
+    List all calendar events between date_from and date_to.
+    Handles far-future dates and expands recurring events properly.
+    """
+
+    service, calendar_id = _get_calendar_service_and_target()
+
+    # Ensure Google gets proper RFC3339 timestamps
+    # Google REQUIRES timezone in the format: 2025-11-26T00:00:00-05:00
+    def ensure_rfc3339(dt_str: str) -> str:
+        # If datetime has no timezone, append the calendar timezone
+        if "Z" in dt_str or "+" in dt_str or "-" in dt_str[10:]:
+            return dt_str  # already has TZ
+        return f"{dt_str}{'' if dt_str.endswith('Z') else f'-05:00'}"
+
+    date_from_rfc = ensure_rfc3339(date_from)
+    date_to_rfc = ensure_rfc3339(date_to)
+
+    try:
+        res = (
+            service.events()
+            .list(
+                calendarId=calendar_id,
+                timeMin=date_from_rfc,
+                timeMax=date_to_rfc,
+                singleEvents=True,        # CRITICAL → expands recurring weekly classes
+                orderBy="startTime",      # CRITICAL → required when using singleEvents=True
+                maxResults=max_results,
+                q=search_text or None,
+            )
+            .execute()
+        )
+
+        items = res.get("items", [])
+
+        return {
+            "ok": True,
+            "events": [
+                {
+                    "id": ev.get("id"),
+                    "summary": ev.get("summary"),
+                    "start": ev.get("start"),
+                    "end": ev.get("end"),
+                    "location": ev.get("location"),
+                }
+                for ev in items
+            ],
+        }
+
+    except HttpError as e:
+        return {"ok": False, "error": str(e)}
+
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+
+def tool_delete_calendar_event(*, event_id: str) -> Dict[str, Any]:
+    """
+    Delete a single event by its Google Calendar event id.
+    """
+    service, calendar_id = _get_calendar_service_and_target()
+    print(f"[tool_delete_calendar_event] Deleting event {event_id} from {calendar_id}")
+    try:
+        service.events().delete(calendarId=calendar_id, eventId=event_id).execute()
+        return {"ok": True, "deleted_event_id": event_id}
+    except HttpError as e:
+        print(f"[tool_delete_calendar_event] HttpError: {e}")
+        return {"ok": False, "error": str(e), "event_id": event_id}
+    except Exception as e:
+        print(f"[tool_delete_calendar_event] Exception: {e}")
+        return {"ok": False, "error": str(e), "event_id": event_id}
+
+
+
+def tool_update_calendar_event_time(
+    *,
+    event_id: str,
+    new_start_iso: str,
+    new_end_iso: str,
+) -> Dict[str, Any]:
+    """
+    Move/reschedule a single event to new start/end datetimes (ISO strings).
+    """
+    service, calendar_id = _get_calendar_service_and_target()
+    print(
+        f"[tool_update_calendar_event_time] Updating event {event_id} on "
+        f"{calendar_id} to {new_start_iso} -> {new_end_iso}"
+    )
+    try:
+        ev = (
+            service.events()
+            .get(calendarId=calendar_id, eventId=event_id)
+            .execute()
+        )
+
+        ev["start"] = {"dateTime": new_start_iso, "timeZone": CAL_TIMEZONE}
+        ev["end"] = {"dateTime": new_end_iso, "timeZone": CAL_TIMEZONE}
+
+        updated = (
+            service.events()
+            .update(calendarId=calendar_id, eventId=event_id, body=ev)
+            .execute()
+        )
+
+        return {
+            "ok": True,
+            "updated_event_id": updated.get("id"),
+            "new_start": updated.get("start"),
+            "new_end": updated.get("end"),
+        }
+    except HttpError as e:
+        print(f"[tool_update_calendar_event_time] HttpError: {e}")
+        return {"ok": False, "error": str(e), "event_id": event_id}
+    except Exception as e:
+        print(f"[tool_update_calendar_event_time] Exception: {e}")
+        return {"ok": False, "error": str(e), "event_id": event_id}
+    
+def tool_create_calendar_event(
+    *,
+    title: str,
+    start_iso: str,
+    end_iso: str,
+    description: Optional[str] = None,
+    location: Optional[str] = None,
+    recurrence_rule: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Create a new calendar event.
+
+    - title: short summary, e.g. "COMP 228 Study Session"
+    - start_iso / end_iso: ISO 8601 datetimes with timezone info or naive in
+      the calendar timezone.
+    - description / location: optional extra info.
+    - recurrence_rule: optional RFC 5545 RRULE string if you want a repeating
+      event (e.g. "RRULE:FREQ=WEEKLY;COUNT=4").
+    """
+    service, calendar_id = _get_calendar_service_and_target()
+    print(
+        f"[tool_create_calendar_event] Creating event {title!r} on {calendar_id}: "
+        f"{start_iso} -> {end_iso}"
+    )
+
+    event_body: Dict[str, Any] = {
+        "summary": title,
+        "description": description,
+        "location": location,
+        "start": {"dateTime": start_iso, "timeZone": CAL_TIMEZONE},
+        "end": {"dateTime": end_iso, "timeZone": CAL_TIMEZONE},
+    }
+
+    if recurrence_rule:
+        # Google expects a list of RRULE strings
+        event_body["recurrence"] = [recurrence_rule]
+
+    # Strip None values
+    event_body = {k: v for k, v in event_body.items() if v is not None}
+
+    try:
+        created = (
+            service.events()
+            .insert(calendarId=calendar_id, body=event_body)
+            .execute()
+        )
+        return {
+            "ok": True,
+            "created_event_id": created.get("id"),
+            "summary": created.get("summary"),
+            "start": created.get("start"),
+            "end": created.get("end"),
+        }
+    except HttpError as e:
+        print(f"[tool_create_calendar_event] HttpError: {e}")
+        return {"ok": False, "error": str(e)}
+    except Exception as e:
+        print(f"[tool_create_calendar_event] Exception: {e}")
+        return {"ok": False, "error": str(e)}
+
+
+CAL_CHAT_TOOL_IMPLS = {
+    "list_calendar_events": tool_list_calendar_events,
+    "delete_calendar_event": tool_delete_calendar_event,
+    "update_calendar_event_time": tool_update_calendar_event_time,
+    "create_calendar_event": tool_create_calendar_event,
+}
+
+
 

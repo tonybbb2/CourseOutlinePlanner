@@ -5,8 +5,10 @@ import {
   type BackendEvent,
   syncCourseToGoogle,
   disconnectGoogle,
+  type AuthStatus,
 } from "./api";
 import "./App.css";
+import { CalendarAssistant } from "./components/CalendarAssistant";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
@@ -63,9 +65,7 @@ function App() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const [connectError, setConnectError] = useState<string | null>(null);
-  const [authStatus, setAuthStatus] = useState<AuthStatus>({
-    connected: false,
-  });
+  const [authStatus, setAuthStatus] = useState<AuthStatus>({ connected: false });
   const [calendarRefreshKey, setCalendarRefreshKey] = useState(0);
 
   const DEMO_CAL_URL =
@@ -113,10 +113,8 @@ function App() {
   const handleDisconnectGoogle = async () => {
     try {
       await disconnectGoogle();
-      // reset local auth state
       setAuthStatus({ connected: false, email: null });
       setGoogleCalendarEmbedUrl(DEMO_CAL_URL);
-      // force iframe reload so it shows the demo calendar again
       setCalendarRefreshKey((prev) => prev + 1);
     } catch (err) {
       console.error("Failed to disconnect from Google", err);
@@ -154,10 +152,7 @@ function App() {
 
     try {
       await syncCourseToGoogle(course.id);
-
       setSyncMessage("Course events synced to Google Calendar!");
-
-      // 🔄 Force the embedded calendar to reload and pick up new events
       setCalendarRefreshKey((prev) => prev + 1);
     } catch (err: any) {
       console.error(err);
@@ -184,7 +179,7 @@ function App() {
       .length ?? 0;
 
   const handleConnectGoogle = async () => {
-    console.log("[ConnectGoogle] clicked"); // <- check console for this
+    console.log("[ConnectGoogle] clicked");
     setConnectError(null);
 
     try {
@@ -210,7 +205,6 @@ function App() {
         return;
       }
 
-      // jump to Google OAuth consent
       window.location.href = data.url;
     } catch (err) {
       console.error("[ConnectGoogle] fetch failed:", err);
@@ -353,7 +347,7 @@ function App() {
           </section>
         </div>
 
-        {/* RIGHT PANEL – CALENDAR */}
+        {/* RIGHT PANEL – CALENDAR + CHAT */}
         <aside className="app-panel app-panel--calendar">
           <div className="card card--calendar">
             <div className="card-header">
@@ -367,6 +361,7 @@ function App() {
                 </p>
               </div>
             </div>
+
             {authStatus.connected && (
               <div className="card-actions card-actions--right">
                 <button
@@ -407,6 +402,11 @@ function App() {
                   >
                     Connect Google Calendar
                   </button>
+                  {connectError && (
+                    <p className="error-text" style={{ marginTop: "0.5rem" }}>
+                      {connectError}
+                    </p>
+                  )}
                 </div>
               )}
             </div>
@@ -416,6 +416,11 @@ function App() {
                 ? "This is your Google Calendar. Any synced course will appear alongside your other events."
                 : "We show a demo calendar by default. Connect your Google account to see your real schedule."}
             </p>
+          </div>
+
+          {/* Chat assistant lives OUTSIDE the calendar frame so it is always visible */}
+          <div style={{ marginTop: "1rem" }}>
+            <CalendarAssistant />
           </div>
         </aside>
       </div>
