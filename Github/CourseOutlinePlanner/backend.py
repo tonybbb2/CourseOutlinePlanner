@@ -51,6 +51,7 @@ CAL_CLIENT_JSON = os.getenv("CAL_CLIENT_JSON") or os.path.join(
 CAL_TIMEZONE = os.getenv("CAL_TIMEZONE", "America/Toronto")
 # We will write to each user's "primary" calendar
 CALENDAR_ID = os.getenv("CALENDAR_ID", "primary")
+CAL_TOKEN_JSON = os.getenv("CAL_TOKEN_JSON", os.path.join(os.getcwd(), "gcal_token.json"))
 
 # Frontend origin & OAuth redirect URI
 FRONTEND_ORIGIN = os.getenv("FRONTEND_ORIGIN", "http://localhost:5173")
@@ -64,6 +65,19 @@ OAUTH_REDIRECT_URI = os.getenv(
 SESSION_CREDS: Dict[str, str] = {}  # session_id -> creds.to_json()
 SESSION_EMAIL: Dict[str, str] = {}  # session_id -> user email
 
+# Single-user dev storage (what we're actually using now)
+GLOBAL_CREDS_JSON: Optional[str] = None
+GLOBAL_EMAIL: Optional[str] = None
+
+GLOBAL_CALENDAR_ID: Optional[str] = None
+CAL_TOKEN_JSON = os.getenv("CAL_TOKEN_JSON", os.path.join(os.getcwd(), "gcal_token.json"))
+# Try to load previous token (if it exists)
+if os.path.exists(CAL_TOKEN_JSON):
+    try:
+        with open(CAL_TOKEN_JSON, "r", encoding="utf-8") as f:
+            GLOBAL_CREDS_JSON = f.read()
+    except Exception:
+        pass
 
 def _get_google_creds_for_session(session_id: str) -> Credentials:
     """
@@ -97,43 +111,54 @@ def _get_calendar_service_for_session(session_id: str):
     return build("calendar", "v3", credentials=creds)
 
 
-def _event_to_google_body(ev: "Event") -> dict:
+def _event_to_google_body(
+    ev: "Event",
+    *,
+    app_event_id: Optional[str] = None,
+    start_override: Optional[datetime] = None,
+    end_override: Optional[datetime] = None,
+) -> dict:
     """
     Map your Event model → Google Calendar event payload.
-    Uses private extendedProperties to track source & app_event_id
-    so we can avoid duplicates / update in place.
-    """
-    start_dt = ev.start.isoformat()
 
+    app_event_id: lets us distinguish repeated weekly events (e.g., ev.id + "_wk3")
+    start_override/end_override: lets us move the event to another week while
+    keeping duration the same.
+    """
+
+    # Base start/end
+    start_dt = start_override or ev.start
+    if end_override is not None:
+        end_dt = end_override
+    elif ev.end is not None:
+        end_dt = ev.end
+    else:
+        # default duration = 1 hour
+        end_dt = start_dt + timedelta(hours=1)
+
+    # Duration for recurring events if needed elsewhere
     body: Dict[str, object] = {
         "summary": ev.title,
         "location": ev.location or None,
         "description": f"{ev.type.upper()} (Course ID: {ev.course_id})",
-        "start": {"dateTime": start_dt, "timeZone": CAL_TIMEZONE},
+        "start": {"dateTime": start_dt.isoformat(), "timeZone": CAL_TIMEZONE},
+        "end": {"dateTime": end_dt.isoformat(), "timeZone": CAL_TIMEZONE},
         "extendedProperties": {
             "private": {
                 "source": "course-outline",
                 "course_id": ev.course_id,
-                "app_event_id": ev.id,
+                # use override if provided, otherwise event id
+                "app_event_id": app_event_id or ev.id,
             }
         },
         "colorId": "6" if ev.type in {"midterm", "final", "test", "quiz"} else None,
     }
 
-    # End time: use provided end or default to +1h
-    if ev.end:
-        body["end"] = {"dateTime": ev.end.isoformat(), "timeZone": CAL_TIMEZONE}
-    else:
-        body["end"] = {
-            "dateTime": (ev.start + timedelta(hours=1)).isoformat(),
-            "timeZone": CAL_TIMEZONE,
-        }
-
     # Strip None values
     return {k: v for k, v in body.items() if v is not None}
 
 
-def _find_existing_event_by_app_id(service, app_event_id: str):
+def _find_existing_event_by_app_id(service, calendar_id: str, app_event_id: str):
     """
     Look up events with our private extended property to avoid duplicates.
     """
@@ -141,7 +166,7 @@ def _find_existing_event_by_app_id(service, app_event_id: str):
         res = (
             service.events()
             .list(
-                calendarId=CALENDAR_ID,
+                calendarId=calendar_id,
                 privateExtendedProperty=f"app_event_id={app_event_id}",
                 maxResults=2,
                 singleEvents=True,
@@ -393,38 +418,65 @@ def get_google_auth_url():
 
     return {"url": auth_url}
 
+@app.post("/api/auth/logout")
+def google_logout():
+    """
+    Clear the stored Google credentials and calendar id (single-user dev logout).
+    This will make /api/auth/status return connected: false.
+    """
+    global GLOBAL_CREDS_JSON, GLOBAL_EMAIL, GLOBAL_CALENDAR_ID
+
+    GLOBAL_CREDS_JSON = None
+    GLOBAL_EMAIL = None
+    GLOBAL_CALENDAR_ID = None
+
+    # Remove token file so we don't auto-login on next backend restart
+    try:
+        if os.path.exists(CAL_TOKEN_JSON):
+            os.remove(CAL_TOKEN_JSON)
+    except Exception as e:
+        print("Failed to remove token file:", e)
+
+    return {"ok": True}
+
 
 @app.get("/api/auth/google/callback")
 def google_auth_callback(code: str, state: str):
     if not os.path.exists(CAL_CLIENT_JSON):
         raise HTTPException(
-            status_code=500, detail=f"credentials.json not found at: {CAL_CLIENT_JSON}"
+            status_code=500,
+            detail=f"credentials.json not found at: {CAL_CLIENT_JSON}",
         )
 
-    global GLOBAL_CREDS_JSON, GLOBAL_EMAIL
+    global GLOBAL_CREDS_JSON, GLOBAL_EMAIL, GLOBAL_CALENDAR_ID
 
+    # Build OAuth flow
     flow = Flow.from_client_secrets_file(
         CAL_CLIENT_JSON,
         scopes=SCOPES,
         redirect_uri=OAUTH_REDIRECT_URI,
     )
-    flow.fetch_token(code=code)
 
+    # Exchange authorization code for tokens
+    flow.fetch_token(code=code)
     creds = flow.credentials
+
+    # Save credentials in memory
     GLOBAL_CREDS_JSON = creds.to_json()
 
-    # Get primary calendar id (usually the user's email)
+    # Persist token to disk so we stay logged in after backend restart
     try:
         service = build("calendar", "v3", credentials=creds)
         primary_cal = service.calendarList().get(calendarId="primary").execute()
         cal_id = primary_cal.get("id")
         if cal_id:
-            GLOBAL_EMAIL = cal_id
+            GLOBAL_EMAIL = cal_id  # used by frontend embed
+            GLOBAL_CALENDAR_ID = cal_id  # used when inserting events
     except Exception:
         GLOBAL_EMAIL = None
+        GLOBAL_CALENDAR_ID = None
 
     return RedirectResponse(url=f"{FRONTEND_ORIGIN}?connected=1")
-
 @app.get("/api/auth/status", response_model=AuthStatus)
 def auth_status():
     if not GLOBAL_CREDS_JSON:
@@ -482,62 +534,197 @@ async def list_all_events():
 
 
 @app.post("/api/courses/{course_id}/sync-google")
-async def sync_course_to_google(course_id: str, request: Request):
+async def sync_course_to_google(course_id: str):
     """
-    Sync a course's events into the logged-in user's Google Calendar.
-    Uses the session_id cookie to find stored Google credentials.
+    Sync a course's events into the user's Google Calendar.
+
+    - Events whose type contains "class", "tutorial", or "lab" are expanded
+      into weekly occurrences up to the end of the term.
+    - Other events (midterms, finals, exams, etc.) are treated as one-off.
     """
     course = COURSES.get(course_id)
     if not course:
         raise HTTPException(status_code=404, detail="Course not found")
 
-    session_id = request.cookies.get("session_id")
-    if not session_id:
-        raise HTTPException(status_code=401, detail="Not connected to Google")
+    # Decide which calendar we write to: prefer the one discovered via OAuth,
+    # fallback to CALENDAR_ID ("primary") from env.
+    target_calendar_id = GLOBAL_CALENDAR_ID or CALENDAR_ID
+
+    # Figure out an "end of term" date for recurring events.
+    upper_date: Optional[datetime] = None
+
+    # 1) Prefer latest final/exam
+    for ev in course.events:
+        ev_type = ev.type.lower()
+        if "final" in ev_type or "exam" in ev_type:
+            if upper_date is None or ev.start > upper_date:
+                upper_date = ev.start
+
+    # 2) If none, use latest event date
+    if upper_date is None and course.events:
+        upper_date = max(ev.start for ev in course.events)
+
+    # 3) Still none? Fallback: 16 weeks after earliest event
+    if upper_date is None and course.events:
+        earliest = min(ev.start for ev in course.events)
+        upper_date = earliest + timedelta(weeks=16)
 
     try:
-        service = _get_calendar_service_for_session(session_id)
+        service = _get_calendar_service()  # uses GLOBAL_CREDS_JSON
+    except HTTPException:
+        raise HTTPException(
+            status_code=401,
+            detail="Not connected to Google. Please connect your Google Calendar first.",
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Google auth failed: {e}")
 
     results = []
+
+    # Helper: yield weekly occurrences of an event up to upper_date.
+    def weekly_occurrences(ev: Event):
+        current = ev.start
+        while upper_date is not None and current <= upper_date:
+            yield current
+            current = current + timedelta(weeks=1)
+
     for ev in course.events:
-        body = _event_to_google_body(ev)
-        try:
-            existing = _find_existing_event_by_app_id(service, ev.id)
-            if existing:
-                updated = (
-                    service.events()
-                    .update(
-                        calendarId=CALENDAR_ID,
-                        eventId=existing["id"],
-                        body=body,
-                    )
-                    .execute()
-                )
-                results.append(
-                    {
-                        "event_id": ev.id,
-                        "status": "updated",
-                        "gcal_id": updated.get("id"),
-                    }
-                )
-            else:
-                created = (
-                    service.events()
-                    .insert(calendarId=CALENDAR_ID, body=body)
-                    .execute()
-                )
-                results.append(
-                    {
-                        "event_id": ev.id,
-                        "status": "created",
-                        "gcal_id": created.get("id"),
-                    }
-                )
-        except HttpError as he:
-            results.append(
-                {"event_id": ev.id, "status": "error", "error": str(he)}
+        ev_type = ev.type.lower()
+
+        # Treat classes/tutorials/labs as weekly recurring
+        if ("class" in ev_type) or ("tutorial" in ev_type) or ("lab" in ev_type):
+            base_duration = (
+                (ev.end - ev.start) if ev.end is not None else timedelta(hours=1)
             )
 
+            for idx, occ_start in enumerate(weekly_occurrences(ev)):
+                occ_end = occ_start + base_duration
+                app_event_id = f"{ev.id}_wk{idx}"  # unique id per week
+
+                body = _event_to_google_body(
+                    ev,
+                    app_event_id=app_event_id,
+                    start_override=occ_start,
+                    end_override=occ_end,
+                )
+
+                try:
+                    existing = _find_existing_event_by_app_id(
+                        service, target_calendar_id, app_event_id
+                    )
+                    if existing:
+                        updated = (
+                            service.events()
+                            .update(
+                                calendarId=target_calendar_id,
+                                eventId=existing["id"],
+                                body=body,
+                            )
+                            .execute()
+                        )
+                        results.append(
+                            {
+                                "event_id": app_event_id,
+                                "status": "updated",
+                                "gcal_id": updated.get("id"),
+                            }
+                        )
+                    else:
+                        created = (
+                            service.events()
+                            .insert(calendarId=target_calendar_id, body=body)
+                            .execute()
+                        )
+                        results.append(
+                            {
+                                "event_id": app_event_id,
+                                "status": "created",
+                                "gcal_id": created.get("id"),
+                            }
+                        )
+                except HttpError as he:
+                    results.append(
+                        {
+                            "event_id": app_event_id,
+                            "status": "error",
+                            "error": str(he),
+                        }
+                    )
+
+        else:
+            # One-off events (midterms, finals, exams, etc.)
+            body = _event_to_google_body(ev)
+            try:
+                existing = _find_existing_event_by_app_id(
+                    service, target_calendar_id, ev.id
+                )
+                if existing:
+                    updated = (
+                        service.events()
+                        .update(
+                            calendarId=target_calendar_id,
+                            eventId=existing["id"],
+                            body=body,
+                        )
+                        .execute()
+                    )
+                    results.append(
+                        {
+                            "event_id": ev.id,
+                            "status": "updated",
+                            "gcal_id": updated.get("id"),
+                        }
+                    )
+                else:
+                    created = (
+                        service.events()
+                        .insert(calendarId=target_calendar_id, body=body)
+                        .execute()
+                    )
+                    results.append(
+                        {
+                            "event_id": ev.id,
+                            "status": "created",
+                            "gcal_id": created.get("id"),
+                        }
+                    )
+            except HttpError as he:
+                results.append(
+                    {"event_id": ev.id, "status": "error", "error": str(he)}
+                )
+
     return {"course_id": course_id, "synced": results}
+
+def _get_google_creds_single_user() -> Credentials:
+    """
+    Return Credentials for the single logged-in user (dev mode).
+
+    Uses GLOBAL_CREDS_JSON, refreshes if needed, and updates the stored JSON.
+    """
+    global GLOBAL_CREDS_JSON  # declare global at the top
+
+    if not GLOBAL_CREDS_JSON:
+        # Not connected yet
+        raise HTTPException(status_code=401, detail="Not connected to Google")
+
+    info = json.loads(GLOBAL_CREDS_JSON)
+    creds = Credentials.from_authorized_user_info(info, SCOPES)
+
+    if not creds.valid:
+        if creds.expired and creds.refresh_token:
+            # Refresh and update global storage
+            creds.refresh(GoogleRequest())
+            GLOBAL_CREDS_JSON = creds.to_json()
+        else:
+            raise HTTPException(status_code=401, detail="Google credentials expired")
+
+    return creds
+
+
+def _get_calendar_service():
+    """
+    Build a Google Calendar service for the single logged-in user.
+    """
+    creds = _get_google_creds_single_user()
+    return build("calendar", "v3", credentials=creds)
+

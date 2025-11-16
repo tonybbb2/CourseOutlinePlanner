@@ -66,10 +66,13 @@
 }
 
 .app-logo-dot {
-  width: 2.25rem;
-  height: 2.25rem;
+  width: 4.25rem;
+  height: 4.25rem;
   border-radius: 999px;
-  background: conic-gradient(from 180deg, #2563eb, #22c55e, #f97316, #2563eb);
+  background-image: url('/CP_logo.png');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
   position: relative;
   flex-shrink: 0;
 }
@@ -79,8 +82,9 @@
   position: absolute;
   inset: 4px;
   border-radius: inherit;
-  background: #0b1120;
+  background: transparent; /* remove the dark overlay */
 }
+
 
 .app-title {
   margin: 0;

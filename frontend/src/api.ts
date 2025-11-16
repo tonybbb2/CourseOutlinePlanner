@@ -57,3 +57,15 @@ export async function syncCourseToGoogle(courseId: string): Promise<void> {
     throw new Error(msg);
   }
 }
+
+export async function disconnectGoogle(): Promise<void> {
+  const res = await fetch(`${BASE_URL}/api/auth/logout`, {
+    method: "POST",
+    credentials: "include",
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || "Failed to disconnect");
+  }
+}
