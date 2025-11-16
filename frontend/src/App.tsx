@@ -3,7 +3,7 @@ import { uploadSyllabus, type BackendCourse, syncCourseToGoogle } from "./api";
 import { FileUpload } from "./components/FileUpload";
 import { ParsedEvents } from "./components/ParsedEvents";
 import { SyncButton } from "./components/SyncButton";
-import { GoogleCalendarFrame } from "./components/GoogleCalendarFrame";
+import { CalendarView } from "./components/CalendarView";
 import { Toast, ToastType } from "./components/Toast";
 import "./App.css";
 
@@ -18,9 +18,6 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastState | null>(null);
-
-  const googleCalendarEmbedUrl =
-    "https://calendar.google.com/calendar/embed?src=a01db11882c157a9d7fbd72501759c4580ec8d4de176547a21e7e34036112b39%40group.calendar.google.com&ctz=America%2FToronto";
 
   const handleFileSelect = async (file: File) => {
     setSelectedFile(file);
@@ -132,7 +129,7 @@ function App() {
                 <div className="step-badge">3</div>
                 <h2>Calendar View</h2>
               </div>
-              <GoogleCalendarFrame embedUrl={googleCalendarEmbedUrl} />
+              <CalendarView course={course} onExport={handleSync} />
             </section>
           </div>
         </div>
