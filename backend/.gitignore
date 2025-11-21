@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environments
+CourseOutlinePlanner/venv/
+venv*/ 
+
+# Env files
+.env
+*.env
+apikey.env
+
+# Secrets - NEVER COMMIT
+secrets/
+Current/
+credentials.json
+token.json
+google_credentials.json
+google_token.json
+
+# Generated data / personal files
+course_data.json
+*.pdf
+*.png
+*.jpg
+*.jpeg
+*.svg
+
+# IDE / OS junk
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

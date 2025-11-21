@@ -25,6 +25,7 @@ export async function uploadSyllabus(file: File): Promise<BackendCourse> {
   const res = await fetch(`${BASE_URL}/api/upload-syllabus`, {
     method: "POST",
     body: formData,
+    credentials: "include",
   });
 
   if (!res.ok) {
@@ -55,4 +56,41 @@ export async function syncCourseToGoogle(courseId: string): Promise<void> {
     }
     throw new Error(msg);
   }
+}
+
+export async function disconnectGoogle(): Promise<void> {
+  const res = await fetch(`${BASE_URL}/api/auth/logout`, {
+    method: "POST",
+    credentials: "include",
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || "Failed to disconnect");
+  }
+}
+
+export type ChatMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
+
+export async function chatWithCalendar(
+  messages: ChatMessage[]
+): Promise<string> {
+  const res = await fetch(`${BASE_URL}/api/chat/calendar`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ messages }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Chat failed: ${text}`);
+  }
+
+  const data = await res.json();
+  return data.reply as string;
 }
