@@ -777,7 +777,7 @@ async def upload_syllabus(file: UploadFile = File(...)):
     pdf_bytes = await file.read()
 
     try:
-        course = extract_course_data_from_pdf(pdf_bytes)
+        course =  extract_course_data_from_pdf(pdf_bytes)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

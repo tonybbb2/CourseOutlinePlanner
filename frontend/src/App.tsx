@@ -220,7 +220,7 @@ function App() {
           <header className="app-header">
             <div className="app-logo-dot" />
             <div>
-              <h1 className="app-title">Course Outline Planer</h1>
+              <h1 className="app-title">Course Outline Planner</h1>
               <p className="app-subtitle">
                 Upload a syllabus PDF and turn all your lectures, labs, and
                 exams into Google Calendar events in a few clicks.
@@ -366,7 +366,7 @@ function App() {
               <div className="card-actions card-actions--right">
                 <button
                   type="button"
-                  className="btn btn--ghost btn--sm"
+                  className="btn btn--ghost btn--sm mr-2"
                   onClick={handleDisconnectGoogle}
                 >
                   Disconnect Google
