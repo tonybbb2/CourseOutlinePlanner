@@ -238,6 +238,20 @@ function App() {
 
   return (
     <div className="min-h-screen bg-[#f7fafc] text-slate-900">
+      <style>
+        {`
+          @keyframes floatYou {
+            0% { transform: translateX(8px); }
+            50% { transform: translateX(-8px); }
+            100% { transform: translateX(8px); }
+          }
+          @keyframes floatAiTag {
+            0% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+            100% { transform: translateY(0); }
+          }
+        `}
+      </style>
       <section className="relative min-h-screen overflow-hidden bg-gradient-to-b from-white via-[#fff4e9] to-[#ffe3c7] pb-24">
         <div className="morph-blob morph-blob--sunset" aria-hidden="true" />
 
@@ -262,19 +276,20 @@ function App() {
             </div>
           </header>
 
-          <div className="w-full py-12 items-start justify-between mt-20 p-36 grid gap-12 lg:grid-cols-[1.05fr_0.95fr]">
-            <div className="space-y-7">
-              <div className="inline-flex items-center gap-2 rounded-full bg-white/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-orange-700 shadow-sm backdrop-blur">
-                AI semester co-pilot
-              </div>
-              <h1 className="m-0 text-4xl font-bold leading-tight text-slate-900 sm:text-6xl">
-                Plan your semester in <span className="underline">one</span> click.
-              </h1>
-              <p className="m-0 max-w-xl text-lg text-slate-600">
-                Upload any syllabus and get a clean, synced schedule for Google
-                and Outlook in minutes—no more manual event entry.
-              </p>
-              <div className="flex flex-wrap items-center gap-3">
+            <div className="w-full py-12 flex flex-col items-center text-center mt-20 p-36 gap-12 lg:grid-cols-[1.05fr_0.95fr]">
+              <div className="space-y-7">
+                <div className="text-center inline-flex items-center gap-2 rounded-full bg-white/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-orange-700 shadow-sm backdrop-blur">
+                  AI semester co-pilot
+                </div>
+                <h1 className="m-0 text-4xl font-extrabold leading-tight text-slate-900 sm:text-6xl text-center">
+                  Plan your semester in
+                  <br />
+                  <span className="underline">one</span> click
+                </h1>
+                <p className="m-0 max-w-xl text-md text-slate-600 mx-auto text-center">
+                  Auto-sync syllabi to calendars.
+                </p>
+              {/* <div className="flex flex-wrap items-center gap-3">
                 <button
                   className="inline-flex items-center rounded-full bg-black px-5 py-2.5 text-sm font-semibold text-white shadow-[0_12px_28px_rgba(0,0,0,0.24)] transition hover:-translate-y-[1px]"
                   onClick={() =>
@@ -295,7 +310,7 @@ function App() {
                 >
                   How it works
                 </button>
-              </div>
+              </div> */}
               {/* <div className="grid grid-cols-1 gap-3 py-2 sm:grid-cols-2">
                 <div className="flex items-center gap-3 rounded-xl bg-white/80 p-3 shadow-sm backdrop-blur">
                   <div className="flex h-9 w-9 items-center justify-center rounded-full bg-orange-100 text-orange-700">
@@ -327,18 +342,12 @@ function App() {
               </div> */}
             </div>
 
-            <div className="relative w-full max-w-[560px]">
+            <div className="relative w-2/3 max-w-[660px]">
               <div className="absolute -top-4 -left-6 h-20 w-20 rounded-full border border-orange-200/70 bg-white/60 backdrop-blur" />
               <div className="absolute -bottom-8 -right-10 h-24 w-24 rounded-full border border-orange-200/70 bg-white/60 backdrop-blur" />
               <div className="relative flex flex-col rounded-2xl border border-gray-200 bg-white/90 p-6 shadow-xl backdrop-blur-lg">
                 <div className="flex items-start gap-3">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-orange-100 text-sm font-semibold uppercase text-black">
-                    PDF
-                  </div>
                   <div>
-                    <p className="m-0 text-xs font-semibold uppercase tracking-[0.16em] text-orange-700">
-                      Upload syllabi
-                    </p>
                     <p className="m-0 mt-1 text-sm text-gray-600">
                       Drag your course outline here and we will detect lectures,
                       exams, and labs automatically.
@@ -429,11 +438,77 @@ function App() {
 
                 <div className="mt-5 text-center">
                   <p className="m-0 text-xs text-center text-gray-500">
-                                        Secure upload. We extract your schedule in seconds so you
+                    Secure upload. We extract your schedule in seconds so you
                     can review before syncing.
                   </p>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+        <div className="pointer-events-none absolute bottom-9 right-8 flex flex-col items-end gap-2 max-w-[260px] text-slate-900 max-[700px]:hidden">
+          <div className="relative flex items-center gap-3 pr-2">
+            <div className="flex h-24 w-24 items-center justify-center rounded-full border border-slate-200 bg-[#f6fcf5] shadow-[0_14px_45px_rgba(15,23,42,0.15)]">
+              <p className="m-0 text-center text-sm leading-snug text-gray-700">
+                Drop
+                <br />
+                course file
+              </p>
+            </div>
+            <div
+              className="relative flex items-center"
+              style={{ animation: "floatYou 4.8s ease-in-out infinite" }}
+            >
+              <span className="rounded-full bg-slate-800 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-white shadow-md">
+                You
+              </span>
+              <span className="absolute -left-3 top-1/2 h-3 w-3 -translate-y-1/2 rotate-45 rounded-[3px] bg-slate-700 shadow-sm" />
+            </div>
+          </div>
+          <div className="mr-[66px] h-10 w-px border-r border-dashed border-slate-300 opacity-80" />
+          <div className="flex w-[260px] flex-col rounded-xl border border-slate-200 bg-white/95 p-3 shadow-[0_14px_45px_rgba(15,23,42,0.18)] backdrop-blur">
+            <div className="flex items-center justify-between text-sm font-semibold text-gray-600">
+              <span>Calendar Sync</span>
+              <span className="text-base leading-none text-slate-400">⌄</span>
+            </div>
+            <div className="mt-3 h-2 w-full rounded-full bg-slate-200">
+              <div className="h-full w-[95%] rounded-full bg-orange-400 shadow-[0_4px_10px_rgba(249,115,22,0.45)]" />
+            </div>
+          </div>
+        </div>
+
+        <div className="pointer-events-none absolute left-96 bottom-10 flex flex-col items-start gap-2 max-w-[240px] text-slate-900 max-[700px]:hidden">
+          <div className="relative flex items-start gap-2 pl-2">
+            <div className="flex h-24 w-24 items-center justify-center rounded-full border border-slate-200 bg-[#f6fcf5] shadow-[0_14px_45px_rgba(15,23,42,0.15)]">
+              <p className="m-0 text-center text-sm leading-snug text-gray-700">
+                Auto
+                <br />
+                calendar
+              </p>
+            </div>
+            <div
+              className="absolute left-[88px] -bottom-2 flex items-center"
+              style={{ animation: "floatAiTag 4.4s ease-in-out infinite" }}
+            >
+              <span className="rounded-full bg-orange-500 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-white shadow-md">
+                AI
+              </span>
+              <span className="absolute -left-1.5 -top-1.5 h-3 w-3 rotate-45 rounded-[3px] bg-orange-400 shadow-sm" />
+            </div>
+          </div>
+          <div className="ml-[58px] h-8 w-px border-r border-dashed border-slate-300 opacity-80" />
+          <div className="flex w-[220px] flex-col rounded-xl border border-slate-200 bg-white/95 p-3 shadow-[0_14px_45px_rgba(15,23,42,0.18)] backdrop-blur">
+            <div className="flex items-center justify-between text-sm font-semibold text-gray-600">
+              <span>calendar</span>
+            </div>
+            <div className="mt-3 grid grid-cols-7 gap-1 rounded-lg border border-slate-100 bg-slate-50 p-1.5">
+              {[...Array(10)].map((_, idx) => (
+                <span
+                  key={idx}
+                  className="h-5 rounded-[6px] bg-slate-200/80"
+                  aria-hidden="true"
+                />
+              ))}
             </div>
           </div>
         </div>
