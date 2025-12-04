@@ -1,27 +1,39 @@
-# Python
+# ============================
+# PYTHON
+# ============================
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
 
-# Virtual environments
-CourseOutlinePlanner/venv/
-venv*/ 
+# ============================
+# VIRTUAL ENVIRONMENTS
+# ============================
+# Common names
+venv/
+.venv/
+env/
+ENV/
 
-# Env files
+# Specific to your project structure
+backend/.venv/
+
+# ============================
+# ENVIRONMENT & SECRET FILES
+# ============================
 .env
 *.env
 apikey.env
 
-# Secrets - NEVER COMMIT
-secrets/
-Current/
+# Sensitive Google auth files
 credentials.json
 token.json
 google_credentials.json
 google_token.json
 
-# Generated data / personal files
+# ============================
+# GENERATED / USER DATA
+# ============================
 course_data.json
 *.pdf
 *.png
@@ -29,7 +41,9 @@ course_data.json
 *.jpeg
 *.svg
 
-# IDE / OS junk
+# ============================
+# IDE / EDITOR / OS FILES
+# ============================
 .idea/
 .vscode/
 .DS_Store

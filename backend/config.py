@@ -8,7 +8,7 @@ from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request as GoogleRequest
 
 # Project root = one level above this file's directory
-BASE_DIR = os.path.dirname(os.path.dirname(__file__))
+BASE_DIR = os.path.dirname(__file__)
 
 # Look for apikey.env at project root
 env_path = os.path.join(BASE_DIR, "apikey.env")
