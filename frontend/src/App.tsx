@@ -1,4 +1,5 @@
 import { useEffect, useState, type ChangeEvent } from "react";
+import { LiaLocationArrowSolid } from "react-icons/lia";
 import {
   uploadSyllabus,
   type BackendCourse,
@@ -250,9 +251,20 @@ function App() {
             50% { transform: translateY(-10px); }
             100% { transform: translateY(0); }
           }
+          @keyframes pulseGlow {
+            0% { transform: scale(0.95); opacity: 0.6; }
+            45% { transform: scale(1.08); opacity: 0.08; }
+            100% { transform: scale(0.95); opacity: 0.6; }
+          }
         `}
       </style>
       <section className="relative min-h-screen overflow-hidden bg-gradient-to-b from-white via-[#fff4e9] to-[#ffe3c7] pb-24">
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center" aria-hidden="true">
+          <div
+            className="h-[72vw] max-h-[1100px] w-[72vw] max-w-[1100px] rounded-full bg-[radial-gradient(circle_at_center,rgba(249,115,22,0.32),rgba(249,115,22,0)_65%)] blur-3xl"
+            style={{ animation: "pulseGlow 12s ease-in-out infinite" }}
+          />
+        </div>
         <div className="morph-blob morph-blob--sunset" aria-hidden="true" />
 
         <div className="relative mx-auto px-6 py-4 lg:py-8">
@@ -276,7 +288,7 @@ function App() {
             </div>
           </header>
 
-            <div className="w-full py-12 flex flex-col items-center text-center mt-20 p-36 gap-12 lg:grid-cols-[1.05fr_0.95fr]">
+            <div className="w-full py-6 flex flex-col items-center text-center mt-20 p-36 gap-12 lg:grid-cols-[1.05fr_0.95fr]">
               <div className="space-y-7">
                 <div className="text-center inline-flex items-center gap-2 rounded-full bg-white/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-orange-700 shadow-sm backdrop-blur">
                   AI semester co-pilot
@@ -446,7 +458,10 @@ function App() {
             </div>
           </div>
         </div>
-        <div className="pointer-events-none absolute bottom-9 right-8 flex flex-col items-end gap-2 max-w-[260px] text-slate-900 max-[700px]:hidden">
+        <div
+          className="pointer-events-none absolute flex flex-col items-end gap-2 max-w-[260px] text-slate-900 max-[900px]:hidden"
+          style={{ top: "65%", right: "76%", transform: "translateY(-50%)" }}
+        >
           <div className="relative flex items-center gap-3 pr-2">
             <div className="flex h-24 w-24 items-center justify-center rounded-full border border-slate-200 bg-[#f6fcf5] shadow-[0_14px_45px_rgba(15,23,42,0.15)]">
               <p className="m-0 text-center text-sm leading-snug text-gray-700">
@@ -459,17 +474,20 @@ function App() {
               className="relative flex items-center"
               style={{ animation: "floatYou 4.8s ease-in-out infinite" }}
             >
-              <span className="rounded-full bg-slate-800 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-white shadow-md">
+              <LiaLocationArrowSolid
+                className="absolute -left-4 top-1/2 -translate-y-1/2 -rotate-90 text-slate-700 drop-shadow-sm"
+                size={14}
+                aria-hidden
+              />
+                            <span className="rounded-full bg-slate-800 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-white shadow-md">
                 You
               </span>
-              <span className="absolute -left-3 top-1/2 h-3 w-3 -translate-y-1/2 rotate-45 rounded-[3px] bg-slate-700 shadow-sm" />
             </div>
           </div>
           <div className="mr-[66px] h-10 w-px border-r border-dashed border-slate-300 opacity-80" />
           <div className="flex w-[260px] flex-col rounded-xl border border-slate-200 bg-white/95 p-3 shadow-[0_14px_45px_rgba(15,23,42,0.18)] backdrop-blur">
             <div className="flex items-center justify-between text-sm font-semibold text-gray-600">
               <span>Calendar Sync</span>
-              <span className="text-base leading-none text-slate-400">⌄</span>
             </div>
             <div className="mt-3 h-2 w-full rounded-full bg-slate-200">
               <div className="h-full w-[95%] rounded-full bg-orange-400 shadow-[0_4px_10px_rgba(249,115,22,0.45)]" />
@@ -477,13 +495,16 @@ function App() {
           </div>
         </div>
 
-        <div className="pointer-events-none absolute left-96 bottom-10 flex flex-col items-start gap-2 max-w-[240px] text-slate-900 max-[700px]:hidden">
-          <div className="relative flex items-start gap-2 pl-2">
-            <div className="flex h-24 w-24 items-center justify-center rounded-full border border-slate-200 bg-[#f6fcf5] shadow-[0_14px_45px_rgba(15,23,42,0.15)]">
-              <p className="m-0 text-center text-sm leading-snug text-gray-700">
-                Auto
+        <div
+          className="pointer-events-none absolute flex flex-col items-start gap-2 max-w-[240px] text-slate-900 max-[900px]:hidden"
+          style={{ top: "35%", left: "76%", transform: "translateY(-50%)" }}
+        >
+          <div className="relative flex items-start gap-6 pl-2">
+            <div className="flex h-24 w-24 items-center justify-center rounded-full border border-slate-300 bg-[#f6fcf5] shadow-[0_14px_45px_rgba(15,23,42,0.15)]">
+              <p className="m-0 text-center text-sm leading-snug text-slate-700">
+                Sync
                 <br />
-                calendar
+                Calendar
               </p>
             </div>
             <div
@@ -493,22 +514,31 @@ function App() {
               <span className="rounded-full bg-orange-500 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-white shadow-md">
                 AI
               </span>
-              <span className="absolute -left-1.5 -top-1.5 h-3 w-3 rotate-45 rounded-[3px] bg-orange-400 shadow-sm" />
+              <LiaLocationArrowSolid
+                className="absolute -left-3 -top-3 -rotate-45 text-orange-400 drop-shadow-sm"
+                size={14}
+                aria-hidden
+              />
             </div>
           </div>
-          <div className="ml-[58px] h-8 w-px border-r border-dashed border-slate-300 opacity-80" />
+          <div className="ml-[74px] h-[1px] w-28 -rotate-8 border-t border-dashed border-slate-300 opacity-80 origin-left" />
           <div className="flex w-[220px] flex-col rounded-xl border border-slate-200 bg-white/95 p-3 shadow-[0_14px_45px_rgba(15,23,42,0.18)] backdrop-blur">
-            <div className="flex items-center justify-between text-sm font-semibold text-gray-600">
-              <span>calendar</span>
+            <div className="flex items-center justify-between text-sm font-semibold text-gray-700">
+              <span>Calendar</span>
             </div>
-            <div className="mt-3 grid grid-cols-7 gap-1 rounded-lg border border-slate-100 bg-slate-50 p-1.5">
-              {[...Array(10)].map((_, idx) => (
-                <span
-                  key={idx}
-                  className="h-5 rounded-[6px] bg-slate-200/80"
-                  aria-hidden="true"
-                />
-              ))}
+            <div className="mt-3 space-y-2">
+              <div className="flex items-center gap-2 text-[13px] text-slate-600">
+                <span className="h-3 w-3 rounded-full bg-[#ef4444]" />
+                <span className="h-2 w-28 rounded-full bg-slate-200" />
+              </div>
+              <div className="flex items-center gap-2 text-[13px] text-slate-600">
+                <span className="h-3 w-3 rounded-full bg-[#f97316]" />
+                <span className="h-2 w-28 rounded-full bg-slate-200" />
+              </div>
+              <div className="flex items-center gap-2 text-[13px] text-slate-600">
+                <span className="h-3 w-3 rounded-full bg-[#334155]" />
+                <span className="h-2 w-24 rounded-full bg-slate-200" />
+              </div>
             </div>
           </div>
         </div>
