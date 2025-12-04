@@ -24,3 +24,5 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(courses.router)
 app.include_router(calendar_chat.router)
+
+#test
