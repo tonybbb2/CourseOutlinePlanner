@@ -1,9 +1,11 @@
+@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap");
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-family: "Space Grotesk", system-ui, -apple-system, "Segoe UI", sans-serif;
   line-height: 1.5;
   font-weight: 400;
   color: #0f172a;
@@ -33,13 +35,9 @@ body {
 
 a {
   font-weight: 500;
-  color: #2563eb;
   text-decoration: none;
 }
 
-a:hover {
-  color: #1d4ed8;
-}
 
 button {
   font-family: inherit;
@@ -51,4 +49,35 @@ h1,
 h2,
 h3 {
   font-weight: 600;
+}
+
+.morph-blob {
+  position: absolute;
+  filter: blur(60px);
+  opacity: 0.75;
+  mix-blend-mode: multiply;
+  animation: morphBlob 18s ease-in-out infinite;
+}
+
+.morph-blob--sunset {
+  background: radial-gradient(circle at 50% 50%, #ffd3a4, #fdf4e4 60%);
+  width: 50vw;
+  height: 50vw;
+  bottom: -20vw;
+  left: 20vw;
+}
+
+@keyframes morphBlob {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  33% {
+    transform: translate3d(4%, -2%, 0) scale(1.05);
+  }
+  66% {
+    transform: translate3d(-3%, 3%, 0) scale(0.98);
+  }
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
 }

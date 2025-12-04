@@ -1,4 +1,4 @@
-import { useEffect, useState, type ChangeEvent } from "react";
+﻿import { useEffect, useState, type ChangeEvent } from "react";
 import {
   uploadSyllabus,
   type BackendCourse,
@@ -112,7 +112,8 @@ function App() {
         } else {
           setGoogleCalendarEmbedUrl(DEMO_CAL_URL);
         }
-      } catch {
+      } catch (err) {
+        console.error("Failed to load auth status", err);
         setAuthStatus({ connected: false });
         setGoogleCalendarEmbedUrl(DEMO_CAL_URL);
       }
@@ -133,8 +134,8 @@ function App() {
       setAuthStatus({ connected: false, email: null });
       setGoogleCalendarEmbedUrl(DEMO_CAL_URL);
       setCalendarRefreshKey((prev) => prev + 1);
-    } catch {
-      // ignore
+    } catch (err) {
+      console.error("Failed to disconnect from Google", err);
     }
   };
 
@@ -149,7 +150,8 @@ function App() {
       const result = await uploadSyllabus(selectedFile);
       setCourse(result);
     } catch (err: any) {
-      setError(err?.message ?? "Upload failed");
+      console.error(err);
+      setError(err.message ?? "Upload failed");
     } finally {
       setLoading(false);
     }
@@ -171,8 +173,16 @@ function App() {
       setSyncMessage("Course events synced to Google Calendar!");
       setCalendarRefreshKey((prev) => prev + 1);
     } catch (err: any) {
+      console.error(err);
       const msg = err?.message ?? String(err ?? "Unknown error");
-      setSyncMessage("Failed to sync: " + msg);
+
+      if (msg.includes("Not connected to Google")) {
+        setSyncMessage(
+          "Failed to sync: not connected to Google. Click Connect Google Calendar in Step 3 and try again."
+        );
+      } else {
+        setSyncMessage("Failed to sync: " + msg);
+      }
     } finally {
       setIsSyncing(false);
     }
@@ -202,51 +212,53 @@ function App() {
       }
 
       const data = await res.json();
+
       if (!data.url) {
         setConnectError("No auth URL returned from server.");
         return;
       }
 
       window.location.href = data.url;
-    } catch (err: any) {
+    } catch (err) {
+      console.error("[ConnectGoogle] fetch failed:", err);
       setConnectError(String(err));
     }
   };
 
   return (
     <div className="min-h-screen bg-[#f7fafc] text-slate-900">
-      <section className="relative min-h-screen overflow-hidden bg-gradient-to-b from-white via-[#fff4e9] to-[#ffe3c7] pb-24">
+      <section className="relative overflow-hidden bg-gradient-to-b from-white via-[#fff4e9] to-[#ffe3c7]">
         <div className="morph-blob morph-blob--sunset" aria-hidden="true" />
 
-        <div className="relative mx-auto px-6 py-8 lg:py-12">
-          <header className="flex items-center justify-between gap-4 rounded-full bg-white/70 px-8 py-2 shadow-sm backdrop-blur">
+        <div className="relative mx-auto max-w-6xl px-6 py-12 lg:py-16">
+          <header className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <div className="h-11 w-11 rounded-full bg-[url('/SS_logo.png')] bg-cover bg-center bg-no-repeat shadow-lg ring-4 ring-white/70" />
+              <div className="h-11 w-11 rounded-full bg-[url('/CP_logo.png')] bg-cover bg-center bg-no-repeat shadow-lg ring-4 ring-white/70" />
               <div>
-                <p className="m-0 text-2xl font-semibold text-black">
-                  SemesterSync <span className="text-xs text-gray-400">[TOOL]</span>
-                </p>               
+                <p className="m-0 text-xs font-semibold uppercase tracking-[0.2em] text-orange-700">
+                  Course Planner
+                </p>
+                <p className="m-0 text-sm text-gray-500">One-click semester scheduling</p>
               </div>
             </div>
-            <div className="hidden items-center text-sm text-gray-800 sm:flex">
-              {/* <a className="hover:text-gray-900" href="#planner">
-                Demo
-              </a> */}
-            </div>
-            <div className="gap-2">
-                <button className={`${ghostButton} border border-gray-700`}>Log in</button>
-              <button className="inline-flex items-center rounded-full bg-black px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-[1px]">
-                Sign up ↗
-              </button>
+              <div className="hidden items-center gap-8 text-sm text-gray-800 sm:flex">
+              <a className="hover:text-gray-900" href="#how-it-works">
+                How it works
+              </a>
+              <a className="hover:text-gray-900" href="#sync">
+                FAQ
+              </a>
+              <button className={`${ghostButton} border border-gray-700`}>Log in</button>
+              <button className={primaryButton}>Sign up</button>
             </div>
           </header>
 
-          <div className="w-full py-24 flex items-center justify-between mt-20 p-32 gap-12 grid items-center gap-12 lg:grid-cols-[1.05fr_0.95fr]">
+          <div className="mt-12 grid items-center gap-12 lg:grid-cols-[1.05fr_0.95fr]">
             <div className="space-y-7">
               <div className="inline-flex items-center gap-2 rounded-full bg-white/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-orange-700 shadow-sm backdrop-blur">
                 AI semester co-pilot
               </div>
-              <h1 className="m-0 text-4xl font-semibold leading-tight text-slate-900 sm:text-6xl">
+              <h1 className="m-0 text-4xl font-semibold leading-tight text-slate-900 sm:text-5xl">
                 Plan your semester in one click.
               </h1>
               <p className="m-0 max-w-xl text-lg text-slate-600">
@@ -254,7 +266,7 @@ function App() {
               </p>
               <div className="flex flex-wrap items-center gap-3">
                 <button
-                  className="inline-flex items-center rounded-full bg-black px-5 py-2.5 text-sm font-semibold text-white shadow-[0_12px_28px_rgba(0,0,0,0.24)] transition hover:-translate-y-[1px]"
+                  className={primaryButton}
                   onClick={() =>
                     document.querySelector("#planner")?.scrollIntoView({ behavior: "smooth" })
                   }
@@ -262,7 +274,7 @@ function App() {
                   Start planning now →
                 </button>
                 <button
-                  className="inline-flex items-center rounded-full border border-gray-300 bg-white px-5 py-2.5 text-sm font-semibold text-gray-900 transition hover:bg-gray-100"
+                  className={`${ghostButton} border border-gray-300`}
                   onClick={() =>
                     document.querySelector("#planner")?.scrollIntoView({ behavior: "smooth" })
                   }
@@ -270,7 +282,7 @@ function App() {
                   See live demo
                 </button>
               </div>
-              {/* <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div className="flex items-center gap-3 rounded-xl bg-white/80 p-3 shadow-sm backdrop-blur">
                   <div className="flex h-9 w-9 items-center justify-center rounded-full bg-orange-100 text-orange-700">
                     📄
@@ -298,7 +310,7 @@ function App() {
                     <p className="m-0 text-xs text-gray-600">Export and share with group projects or TAs.</p>
                   </div>
                 </div>
-              </div> */}
+              </div>
             </div>
 
             <div className="relative">
@@ -307,7 +319,7 @@ function App() {
               <div className="relative rounded-2xl border border-gray-200 bg-white/85 p-6 shadow-xl backdrop-blur-lg">
                 <div className="flex items-center justify-between">
                   <p className="text-sm font-semibold text-slate-900">Sync-ready</p>
-                  <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-800">
+                  <span className="rounded-full bg-green-50 px-3 py-1 text-xs font-semibold text-green-700">
                     Google + Outlook
                   </span>
                 </div>
@@ -367,9 +379,10 @@ function App() {
           </div>
 
           <div className="grid w-full max-w-[1120px] grid-cols-[minmax(0,1.05fr)_minmax(0,1.1fr)] overflow-hidden rounded-[18px] bg-white shadow-[0_24px_70px_rgba(15,23,42,0.2)] max-[900px]:grid-cols-1">
+            {/* LEFT PANEL */}
             <div className={`${panelPadding} bg-white`}>
               <header className="mb-7 flex items-center gap-4">
-                <div className="relative h-[60px] w-[60px] shrink-0 rounded-full bg-[url('/SS_logo.png')] bg-cover bg-center bg-no-repeat" />
+                <div className="relative h-[60px] w-[60px] shrink-0 rounded-full bg-[url('/CP_logo.png')] bg-cover bg-center bg-no-repeat" />
                 <div>
                   <h3 className="m-0 text-xl font-semibold tracking-tight text-slate-900">
                     Upload & review
@@ -380,6 +393,7 @@ function App() {
                 </div>
               </header>
 
+              {/* STEP 1 */}
               <section className={`${cardBase} bg-gray-50`}>
                 <div className="mb-4 flex items-start gap-3">
                   <span className={stepPill}>1</span>
@@ -427,7 +441,7 @@ function App() {
                     disabled={!selectedFile || loading}
                     className={primaryButton}
                   >
-                    {loading ? "Processing syllabus..." : "Upload"}
+                    {loading ? "Processing syllabus…" : "Upload"}
                   </button>
                   {selectedFile && !loading && !course && (
                     <p className="text-xs text-gray-500">
@@ -439,6 +453,7 @@ function App() {
                 {error && <p className="mt-2 text-sm text-red-700">{error}</p>}
               </section>
 
+              {/* STEP 2 */}
               <section className={`${cardBase} bg-gray-50`}>
                 <div className="mb-4 flex items-start gap-3">
                   <span className={stepPill}>2</span>
@@ -487,7 +502,7 @@ function App() {
                         disabled={isSyncing}
                         className={primaryButton}
                       >
-                        {isSyncing ? "Syncing..." : "Sync to Google Calendar"}
+                        {isSyncing ? "Syncing…" : "Sync to Google Calendar"}
                       </button>
                       {syncMessage && (
                         <span className="text-xs text-emerald-700">{syncMessage}</span>
@@ -510,6 +525,7 @@ function App() {
               </section>
             </div>
 
+            {/* RIGHT PANEL */}
             <aside
               id="sync"
               className={`${panelPadding} border-l border-gray-200 bg-gray-50 max-[900px]:border-l-0 max-[900px]:border-t`}
