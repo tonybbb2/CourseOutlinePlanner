@@ -230,7 +230,7 @@ function App() {
   };
 
   return (
-    <div className="flex min-h-screen items-stretch justify-center bg-[radial-gradient(circle_at_top_left,#dbeafe_0,transparent_50%),radial-gradient(circle_at_bottom_right,#fee2e2_0,transparent_55%),#0b1120] px-6 py-10">
+    <div className="flex min-h-screen items-stretch justify-center bg-[radial-gradient(circle_at_top_left,#f1f5ff_0,transparent_45%),radial-gradient(circle_at_bottom_right,#ffe9e9_0,transparent_55%),#f7fafc] px-6 py-10">
       <div className="grid w-full max-w-[1120px] grid-cols-[minmax(0,1.05fr)_minmax(0,1.1fr)] overflow-hidden rounded-[18px] bg-white shadow-[0_24px_70px_rgba(15,23,42,0.35)] max-[900px]:grid-cols-1">
         {/* LEFT PANEL */}
         <div className={`${panelPadding} bg-white`}>
