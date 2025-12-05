@@ -1,4 +1,4 @@
-import { useEffect, useState, type ChangeEvent } from "react";
+﻿import { useEffect, useState, type ChangeEvent } from "react";
 import { LiaLocationArrowSolid } from "react-icons/lia";
 import {
   uploadSyllabus,
@@ -278,17 +278,17 @@ function App() {
                 </p>
               </div>
             </div>
-            <div className="gap-2">
+            <div className="gap-4">
               <button className={`${ghostButton} border border-gray-700`}>
                 Log in
               </button>
               <button className="inline-flex items-center rounded-full bg-black px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-[1px]">
-                Sign up ↗
+                Sign Up
               </button>
             </div>
           </header>
 
-            <div className="w-full py-6 flex flex-col items-center text-center mt-20 p-36 gap-12 lg:grid-cols-[1.05fr_0.95fr]">
+            <div className="w-full py-6 flex flex-col items-center text-center mt-20 p-36 gap-10 lg:grid-cols-[1.05fr_0.95fr]">
               <div className="space-y-7">
                 <div className="text-center inline-flex items-center gap-2 rounded-full bg-white/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-orange-700 shadow-sm backdrop-blur">
                   AI semester co-pilot
@@ -301,57 +301,6 @@ function App() {
                 <p className="m-0 max-w-xl text-md text-slate-600 mx-auto text-center">
                   Auto-sync syllabi to calendars.
                 </p>
-              {/* <div className="flex flex-wrap items-center gap-3">
-                <button
-                  className="inline-flex items-center rounded-full bg-black px-5 py-2.5 text-sm font-semibold text-white shadow-[0_12px_28px_rgba(0,0,0,0.24)] transition hover:-translate-y-[1px]"
-                  onClick={() =>
-                    document
-                      .querySelector("#planner")
-                      ?.scrollIntoView({ behavior: "smooth" })
-                  }
-                >
-                  Start planning now →
-                </button>
-                <button
-                  className="inline-flex items-center rounded-full border border-gray-300 bg-white px-5 py-2.5 text-sm font-semibold text-gray-900 transition hover:bg-gray-100"
-                  onClick={() =>
-                    document
-                      .querySelector("#planner")
-                      ?.scrollIntoView({ behavior: "smooth" })
-                  }
-                >
-                  How it works
-                </button>
-              </div> */}
-              {/* <div className="grid grid-cols-1 gap-3 py-2 sm:grid-cols-2">
-                <div className="flex items-center gap-3 rounded-xl bg-white/80 p-3 shadow-sm backdrop-blur">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-orange-100 text-orange-700">
-                    📄
-                  </div>
-                  <div>
-                    <p className="m-0 text-sm font-semibold text-slate-900">Auto-parse PDFs</p>
-                    <p className="m-0 text-xs text-gray-600">Dates, times, rooms—captured for you.</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 rounded-xl bg-white/80 p-3 shadow-sm backdrop-blur">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-orange-100 text-orange-700">
-                    🔄
-                  </div>
-                  <div>
-                    <p className="m-0 text-sm font-semibold text-slate-900">One-click sync</p>
-                    <p className="m-0 text-xs text-gray-600">Push to Google & Outlook instantly.</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 rounded-xl bg-white/80 p-3 shadow-sm backdrop-blur sm:col-span-2">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-900 text-white">
-                    🤝
-                  </div>
-                  <div>
-                    <p className="m-0 text-sm font-semibold text-slate-900">Shareable schedule</p>
-                    <p className="m-0 text-xs text-gray-600">Export and share with group projects or TAs.</p>
-                  </div>
-                </div>
-              </div> */}
             </div>
 
             <div className="relative w-2/3 max-w-[660px]">
@@ -391,7 +340,7 @@ function App() {
                         e.preventDefault();
                         document.getElementById("hero-upload")?.click();
                       }}
-                      className={`${primaryButton} px-4 py-2 text-sm`}
+                      className={'inline-flex items-center rounded-full bg-black px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-[1px]'}
                     >
                       Choose files
                     </button>
@@ -414,48 +363,77 @@ function App() {
                     </p>
                   )}
                 </label>
+                <div className="mt-5 flex items-end justify-between gap-3">
+                  {selectedFiles.length > 0 && (
 
-                {selectedFiles.length > 0 && (
-                  <div className="mt-3 space-y-2">
-                    {selectedFiles.map((file, idx) => (
-                      <div
-                        key={file.name + file.lastModified}
-                        className="group relative flex items-center gap-3 rounded-xl border border-orange-100 bg-white px-3 py-2 shadow-sm transition hover:-translate-y-[1px] hover:shadow-md"
-                      >
-                        <div className="flex h-12 w-10 items-center justify-center rounded-md bg-orange-100 text-[0.75rem] font-semibold uppercase text-orange-700">
-                          PDF
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p
-                            className="m-0 truncate text-sm font-semibold text-slate-900"
-                            title={file.name}
+                      <div className="flex items-center gap-2">
+                        {selectedFiles.map((file, idx) => (
+                          <div
+                            key={file.name + file.lastModified}
+                            className="group relative flex min-w-[170px] items-center gap-2 rounded-xl border border-orange-100 bg-white px-3 py-2 shadow-sm transition hover:-translate-y-[1px] hover:shadow-md"
                           >
-                            {file.name}
-                          </p>
-                          <p className="m-0 text-[0.72rem] text-gray-500">
-                            PDF file
-                          </p>
-                        </div>
-                        <button
-                          type="button"
-                          className="absolute -right-2 -top-2 inline-flex h-7 w-7 items-center justify-center rounded-full bg-white text-sm font-bold text-gray-500 shadow ring-1 ring-gray-200 transition hover:bg-red-50 hover:text-red-600"
-                          onClick={() => removeFile(idx)}
-                        >
-                          ×
-                        </button>
+                            <div className="flex h-10 w-8 items-center justify-center rounded-md bg-orange-100 text-[0.75rem] font-semibold uppercase text-orange-700">
+                              PDF
+                            </div>
+                            <div className="min-w-0">
+                              <p
+                                className="m-0 truncate text-[0.9rem] font-semibold text-slate-900"
+                                title={file.name}
+                              >
+                                {file.name}
+                              </p>
+                              <p className="m-0 text-[0.72rem] text-gray-500">PDF</p>
+                            </div>
+                            <button
+                              type="button"
+                              className="absolute -right-2 -top-2 inline-flex h-6 w-6 items-center justify-center rounded-full bg-white text-[0.78rem] font-bold text-gray-500 shadow ring-1 ring-gray-200 transition hover:bg-red-50 hover:text-red-600"
+                              onClick={() => removeFile(idx)}
+                            >
+                              ×
+                            </button>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                )}
+                  )}
 
-                <div className="mt-5 text-center">
-                  <p className="m-0 text-xs text-center text-gray-500">
-                    Secure upload. We extract your schedule in seconds so you
-                    can review before syncing.
-                  </p>
+                  <button
+                    onClick={handleUpload}
+                    disabled={!selectedFiles.length || loading}
+                    className="inline-flex h-11 w-11 items-center justify-center rounded-[12px] bg-[#f4b184] text-xl font-semibold text-white shadow-[0_10px_30px_rgba(249,115,22,0.25)] transition hover:-translate-y-[1px] hover:shadow-[0_12px_34px_rgba(249,115,22,0.3)] disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none"
+                    aria-label="Upload syllabus"
+                    title={loading ? "Processing syllabus..." : "Upload syllabus"}
+                  >
+                    {loading ? (
+                      <span className="text-sm leading-none">...</span>
+                    ) : (
+                      <span className="leading-none">↑</span>
+                    )}
+                  </button>
                 </div>
               </div>
             </div>
+                          {/* <div className="flex justify-between">
+                <button
+                  className="inline-flex items-center rounded-full bg-black px-5 py-2.5 text-sm font-semibold text-white shadow-[0_12px_28px_rgba(0,0,0,0.24)] transition hover:-translate-y-[1px]"
+                  onClick={() =>
+                    document
+                      .querySelector("#planner")
+                      ?.scrollIntoView({ behavior: "smooth" })
+                  }
+                >
+                  Start planning now â†’
+                </button>
+                <button
+                  className="inline-flex items-center rounded-full border border-gray-300 bg-white px-5 py-2.5 text-sm font-semibold text-gray-900 transition hover:bg-gray-100"
+                  onClick={() =>
+                    document
+                      .querySelector("#planner")
+                      ?.scrollIntoView({ behavior: "smooth" })
+                  }
+                >
+                  How it works
+                </button>
+              </div> */}
           </div>
         </div>
         <div
@@ -609,7 +587,7 @@ function App() {
                       className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-orange-500 text-xl text-white"
                       aria-hidden="true"
                     >
-                      📄
+                      ðŸ“„
                     </div>
                     <div>
                       <p className="m-0 text-base font-medium leading-snug text-slate-900">
@@ -663,7 +641,7 @@ function App() {
                           className="absolute -right-2 -top-2 inline-flex h-7 w-7 items-center justify-center rounded-full bg-white text-sm font-bold text-gray-500 shadow ring-1 ring-gray-200 transition hover:bg-red-50 hover:text-red-600"
                           onClick={() => removeFile(idx)}
                         >
-                          ×
+                          Ã—
                         </button>
                       </div>
                     ))}
@@ -732,7 +710,7 @@ function App() {
                           {totalEvents} event{totalEvents === 1 ? "" : "s"}
                         </span>
                         <span className={softPill}>
-                          {classEvents} classes · {examEvents} exams
+                          {classEvents} classes Â· {examEvents} exams
                         </span>
                       </div>
                     </div>
@@ -864,3 +842,9 @@ function App() {
 }
 
 export default App;
+
+
+
+
+
+
