@@ -1,10 +1,15 @@
-::root {
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
-    sans-serif;
+@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: "Space Grotesk", system-ui, -apple-system, "Segoe UI", sans-serif;
   line-height: 1.5;
   font-weight: 400;
   color: #0f172a;
-  background-color: #0b1120;
+  background-color: #fff8ee;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -21,26 +26,18 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background-color: #0b1120;
+  background-color: #fff8ee;
 }
 
 #root {
   min-height: 100vh;
 }
 
-/* Links */
-
 a {
   font-weight: 500;
-  color: #2563eb;
   text-decoration: none;
 }
 
-a:hover {
-  color: #1d4ed8;
-}
-
-/* Global button baseline (specific styling in App.css) */
 
 button {
   font-family: inherit;
@@ -48,10 +45,47 @@ button {
   background: none;
 }
 
-/* Headings */
-
 h1,
 h2,
 h3 {
   font-weight: 600;
 }
+
+/* .morph-blob {
+  position: absolute;
+  opacity: 0.75;
+  mix-blend-mode: multiply;
+  animation: morphBlob 18s ease-in-out infinite;
+} */
+
+/* .morph-blob--sunset {
+  background: radial-gradient(
+    circle at 50% 50%,
+    #ffd9b8,
+    #ffe8d2 55%,
+    rgba(255, 232, 210, 0.45) 70%,
+    rgba(255, 232, 210, 0) 85%
+  );
+  width: 90vw;
+  height: 90vw;
+  max-width: 1200px;
+  max-height: 1200px;
+  left: 50%;
+  top: 0;
+  transform: translate(-50%, -5%);
+} */
+/* 
+@keyframes morphBlob {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  33% {
+    transform: translate3d(4%, -2%, 0) scale(1.05);
+  }
+  66% {
+    transform: translate3d(-3%, 3%, 0) scale(0.98);
+  }
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+} */

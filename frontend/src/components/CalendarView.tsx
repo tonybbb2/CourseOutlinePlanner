@@ -51,10 +51,9 @@ export function CalendarView({ course, onExport }: CalendarViewProps) {
 
   if (!course) {
     return (
-      <div className="empty-state">
+      <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-gray-300 bg-white p-6 text-center text-gray-500">
         <svg
-          width="64"
-          height="64"
+          className="h-12 w-12 text-gray-400"
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"
@@ -67,18 +66,21 @@ export function CalendarView({ course, onExport }: CalendarViewProps) {
           <line x1="8" y1="2" x2="8" y2="6" />
           <line x1="3" y1="10" x2="21" y2="10" />
         </svg>
-        <h3>No Course Selected</h3>
-        <p>Upload a course syllabus to see events on the calendar</p>
+        <h3 className="text-sm font-semibold text-slate-900">
+          No Course Selected
+        </h3>
+        <p className="m-0 text-sm text-gray-500">
+          Upload a course syllabus to see events on the calendar
+        </p>
       </div>
     );
   }
 
   if (events.length === 0) {
     return (
-      <div className="empty-state">
+      <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-gray-300 bg-white p-6 text-center text-gray-500">
         <svg
-          width="64"
-          height="64"
+          className="h-12 w-12 text-gray-400"
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"
@@ -91,14 +93,18 @@ export function CalendarView({ course, onExport }: CalendarViewProps) {
           <line x1="8" y1="2" x2="8" y2="6" />
           <line x1="3" y1="10" x2="21" y2="10" />
         </svg>
-        <h3>No Events Found</h3>
-        <p>This course has no scheduled events</p>
+        <h3 className="text-sm font-semibold text-slate-900">
+          No Events Found
+        </h3>
+        <p className="m-0 text-sm text-gray-500">
+          This course has no scheduled events
+        </p>
       </div>
     );
   }
 
   return (
-    <div className="calendar-view">
+    <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
       <CalendarToolbar
         currentDate={currentDate}
         view={view}
@@ -107,7 +113,7 @@ export function CalendarView({ course, onExport }: CalendarViewProps) {
         onExport={onExport ? handleExport : undefined}
       />
 
-      <div className="calendar-content">
+      <div className="mt-4">
         {view === "month" ? (
           <CalendarGrid
             currentDate={currentDate}
