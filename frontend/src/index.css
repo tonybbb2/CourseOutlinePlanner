@@ -9,7 +9,7 @@
   line-height: 1.5;
   font-weight: 400;
   color: #0f172a;
-  background-color: #f7fafc;
+  background-color: #fff8ee;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -26,7 +26,7 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background-color: #f7fafc;
+  background-color: #fff8ee;
 }
 
 #root {
@@ -51,22 +51,30 @@ h3 {
   font-weight: 600;
 }
 
-.morph-blob {
+/* .morph-blob {
   position: absolute;
-  filter: blur(60px);
   opacity: 0.75;
   mix-blend-mode: multiply;
   animation: morphBlob 18s ease-in-out infinite;
-}
+} */
 
-.morph-blob--sunset {
-  background: radial-gradient(circle at 50% 50%, #ffd3a4, #fdf4e4 60%);
-  width: 50vw;
-  height: 50vw;
-  bottom: -20vw;
-  left: 20vw;
-}
-
+/* .morph-blob--sunset {
+  background: radial-gradient(
+    circle at 50% 50%,
+    #ffd9b8,
+    #ffe8d2 55%,
+    rgba(255, 232, 210, 0.45) 70%,
+    rgba(255, 232, 210, 0) 85%
+  );
+  width: 90vw;
+  height: 90vw;
+  max-width: 1200px;
+  max-height: 1200px;
+  left: 50%;
+  top: 0;
+  transform: translate(-50%, -5%);
+} */
+/* 
 @keyframes morphBlob {
   0% {
     transform: translate3d(0, 0, 0) scale(1);
@@ -80,4 +88,4 @@ h3 {
   100% {
     transform: translate3d(0, 0, 0) scale(1);
   }
-}
+} */
