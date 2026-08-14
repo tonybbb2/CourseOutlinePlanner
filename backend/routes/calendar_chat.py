@@ -3,7 +3,7 @@ from typing import Any, Dict, List
 
 from fastapi import APIRouter, HTTPException
 
-from ..models import CalendarChatRequest
+from ..models import CalendarChatRequest, PLAN_STATUS
 from ..config import client
 from ..prompts import CAL_CHAT_SYSTEM_PROMPT, CAL_CHAT_TOOLS
 from ..google_calendar import (
@@ -16,6 +16,8 @@ router = APIRouter(prefix="/api/chat", tags=["calendar-chat"])
 
 @router.post("/calendar")
 async def chat_with_calendar(req: CalendarChatRequest):
+    PLAN_STATUS.assistant_messages_used += 1
+
     # Ensure Google is connected
     try:
         get_calendar_service()
