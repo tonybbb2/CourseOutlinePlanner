@@ -1,81 +1,76 @@
-﻿import { useEffect, useState, type ChangeEvent } from "react";
-import { LiaLocationArrowSolid } from "react-icons/lia";
+import { useEffect, useState, type ChangeEvent } from "react";
 import {
-  uploadSyllabus,
-  type BackendCourse,
-  type BackendEvent,
-  syncCourseToGoogle,
   disconnectGoogle,
+  getPlanStatus,
+  syncCourseToGoogle,
+  uploadSyllabus,
   type AuthStatus,
+  type BackendCourse,
+  type PlanStatus,
 } from "./api";
-import { CalendarAssistant } from "./components/CalendarAssistant";
-import { ghostButton, pill, primaryButton, softPill, stepPill } from "./ui";
+import { AssistantPage } from "./pages/AssistantPage";
+import { BillingPage } from "./pages/BillingPage";
+import { CalendarPage } from "./pages/CalendarPage";
+import { CourseReviewPage } from "./pages/CourseReviewPage";
+import { DashboardPage } from "./pages/DashboardPage";
+import { LandingPage } from "./pages/LandingPage";
+import { LoginPage } from "./pages/LoginPage";
+import { SignupPage } from "./pages/SignupPage";
+import { UploadPage } from "./pages/UploadPage";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+const DEMO_CAL_URL =
+  "https://calendar.google.com/calendar/embed?src=a01db11882c157a9d7fbd72501759c4580ec8d4de176547a21e7e34036112b39%40group.calendar.google.com&ctz=America%2FToronto";
 
-function formatDateTime(iso: string | null | undefined) {
-  if (!iso) return "";
-  const d = new Date(iso);
-  return d.toLocaleString();
-}
+export type Navigate = (path: string) => void;
 
-function EventsTable({ events }: { events: BackendEvent[] }) {
-  if (!events.length)
-    return (
-      <p className="mt-1 text-sm text-gray-500">
-        No events were detected in this syllabus. Double-check your PDF and try
-        again.
-      </p>
-    );
+export type AppPageProps = {
+  selectedFiles: File[];
+  course: BackendCourse | null;
+  coursesVersion: number;
+  loading: boolean;
+  error: string | null;
+  authStatus: AuthStatus;
+  connectError: string | null;
+  googleCalendarEmbedUrl: string;
+  calendarRefreshKey: number;
+  isSyncing: boolean;
+  syncMessage: string | null;
+  planStatus: PlanStatus | null;
+  navigate: Navigate;
+  handleFileChange: (e: ChangeEvent<HTMLInputElement>) => void;
+  removeFile: (idx: number) => void;
+  handleUpload: () => Promise<void>;
+  handleSync: (courseToSync?: BackendCourse | null) => Promise<void>;
+  handleConnectGoogle: () => Promise<void>;
+  handleDisconnectGoogle: () => Promise<void>;
+  setCourse: (course: BackendCourse | null) => void;
+  refreshPlan: () => Promise<void>;
+};
 
-  return (
-    <div className="mt-2 overflow-hidden rounded-[10px] border border-gray-200 bg-white">
-      <table className="w-full border-collapse text-[0.82rem]">
-        <thead className="bg-gray-50">
-          <tr className="text-left text-gray-600">
-            <th className="border-b border-gray-200 px-3 py-2.5 font-semibold">
-              Title
-            </th>
-            <th className="border-b border-gray-200 px-3 py-2.5 font-semibold">
-              Type
-            </th>
-            <th className="border-b border-gray-200 px-3 py-2.5 font-semibold">
-              Start
-            </th>
-            <th className="border-b border-gray-200 px-3 py-2.5 font-semibold">
-              End
-            </th>
-            <th className="border-b border-gray-200 px-3 py-2.5 font-semibold">
-              Location
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {events.map((ev, idx) => (
-            <tr
-              key={ev.id}
-              className={`${
-                idx % 2 === 1 ? "bg-gray-50" : ""
-              } transition-colors hover:bg-orange-50`}
-            >
-              <td className="px-3 py-2.5">{ev.title}</td>
-              <td className="px-3 py-2.5">
-                <span className={softPill}>{ev.type}</span>
-              </td>
-              <td className="px-3 py-2.5">{formatDateTime(ev.start)}</td>
-              <td className="px-3 py-2.5">{formatDateTime(ev.end)}</td>
-              <td className="px-3 py-2.5">{ev.location ?? ""}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
+function usePathname() {
+  const [pathname, setPathname] = useState(window.location.pathname);
+
+  useEffect(() => {
+    const onPopState = () => setPathname(window.location.pathname);
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
+
+  const navigate = (path: string) => {
+    window.history.pushState({}, "", path);
+    setPathname(path);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  return { pathname, navigate };
 }
 
 function App() {
+  const { pathname, navigate } = usePathname();
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [course, setCourse] = useState<BackendCourse | null>(null);
+  const [coursesVersion, setCoursesVersion] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -84,26 +79,27 @@ function App() {
   const [authStatus, setAuthStatus] = useState<AuthStatus>({
     connected: false,
   });
+  const [planStatus, setPlanStatus] = useState<PlanStatus | null>(null);
   const [calendarRefreshKey, setCalendarRefreshKey] = useState(0);
-
-  const panelPadding = "px-9 py-8 max-[900px]:px-6 max-[900px]:py-6";
-  const cardBase = "mb-4 rounded-[14px] border border-gray-200 px-5 pt-5 pb-6";
-  const fileDropClasses =
-    "block rounded-xl border border-dashed border-[#f4b184] bg-gradient-to-r from-[#fff7ed] to-[#fff1e6] p-4 cursor-pointer transition hover:border-orange-500 hover:shadow-[0_0_0_1px_rgba(249,115,22,0.4)] hover:-translate-y-[1px]";
-
-  const DEMO_CAL_URL =
-    "https://calendar.google.com/calendar/embed?src=a01db11882c157a9d7fbd72501759c4580ec8d4de176547a21e7e34036112b39%40group.calendar.google.com&ctz=America%2FToronto";
-
   const [googleCalendarEmbedUrl, setGoogleCalendarEmbedUrl] =
     useState(DEMO_CAL_URL);
 
+  const refreshPlan = async () => {
+    try {
+      setPlanStatus(await getPlanStatus());
+    } catch {
+      setPlanStatus(null);
+    }
+  };
+
   useEffect(() => {
+    refreshPlan();
+
     (async () => {
       try {
         const res = await fetch(`${BASE_URL}/api/auth/status`, {
           credentials: "include",
         });
-
         const data = (await res.json()) as AuthStatus;
         setAuthStatus(data);
 
@@ -133,7 +129,7 @@ function App() {
       const limited = merged.slice(0, 2);
 
       if (merged.length > 2) {
-        setError("You can upload up to 2 PDFs; extra files were ignored.");
+        setError("Free plan supports up to 2 PDFs in this prototype.");
       } else {
         setError(null);
       }
@@ -150,17 +146,6 @@ function App() {
     setError(null);
   };
 
-  const handleDisconnectGoogle = async () => {
-    try {
-      await disconnectGoogle();
-      setAuthStatus({ connected: false, email: null });
-      setGoogleCalendarEmbedUrl(DEMO_CAL_URL);
-      setCalendarRefreshKey((prev) => prev + 1);
-    } catch {
-      // ignore
-    }
-  };
-
   const handleUpload = async () => {
     if (!selectedFiles.length || loading) return;
 
@@ -169,9 +154,11 @@ function App() {
     setSyncMessage(null);
 
     try {
-      // For now we process the first PDF; backend multi-upload can be added later.
       const result = await uploadSyllabus(selectedFiles[0]);
       setCourse(result);
+      setCoursesVersion((prev) => prev + 1);
+      await refreshPlan();
+      navigate(`/courses/${result.id}/review`);
     } catch (err: any) {
       setError(err?.message ?? "Upload failed");
     } finally {
@@ -179,11 +166,11 @@ function App() {
     }
   };
 
-  const handleSync = async () => {
-    if (!course || isSyncing) return;
+  const handleSync = async (courseToSync: BackendCourse | null = course) => {
+    if (!courseToSync || isSyncing) return;
 
     if (!authStatus.connected) {
-      setSyncMessage("Please connect your Google Calendar first in Step 3.");
+      setSyncMessage("Connect Google Calendar before syncing.");
       return;
     }
 
@@ -191,9 +178,10 @@ function App() {
     setSyncMessage(null);
 
     try {
-      await syncCourseToGoogle(course.id);
-      setSyncMessage("Course events synced to Google Calendar!");
+      await syncCourseToGoogle(courseToSync.id);
+      setSyncMessage("Course events synced to Google Calendar.");
       setCalendarRefreshKey((prev) => prev + 1);
+      setCoursesVersion((prev) => prev + 1);
     } catch (err: any) {
       const msg = err?.message ?? String(err ?? "Unknown error");
       setSyncMessage("Failed to sync: " + msg);
@@ -201,14 +189,6 @@ function App() {
       setIsSyncing(false);
     }
   };
-
-  const totalEvents = course?.events.length ?? 0;
-  const classEvents =
-    course?.events.filter((e) => e.type.toLowerCase().includes("class"))
-      .length ?? 0;
-  const examEvents =
-    course?.events.filter((e) => e.type.toLowerCase().includes("exam"))
-      .length ?? 0;
 
   const handleConnectGoogle = async () => {
     setConnectError(null);
@@ -220,8 +200,7 @@ function App() {
       });
 
       if (!res.ok) {
-        const text = await res.text();
-        setConnectError(`Backend error: ${text}`);
+        setConnectError(`Backend error: ${await res.text()}`);
         return;
       }
 
@@ -237,614 +216,55 @@ function App() {
     }
   };
 
-  return (
-    <div className="min-h-screen bg-[#f7fafc] text-slate-900">
-      <style>
-        {`
-          @keyframes floatYou {
-            0% { transform: translateX(8px); }
-            50% { transform: translateX(-8px); }
-            100% { transform: translateX(8px); }
-          }
-          @keyframes floatAiTag {
-            0% { transform: translateY(0); }
-            50% { transform: translateY(-10px); }
-            100% { transform: translateY(0); }
-          }
-          @keyframes pulseGlow {
-            0% { transform: scale(0.95); opacity: 0.6; }
-            45% { transform: scale(1.08); opacity: 0.08; }
-            100% { transform: scale(0.95); opacity: 0.6; }
-          }
-        `}
-      </style>
-      <section className="relative min-h-screen overflow-hidden bg-gradient-to-b from-white via-[#fff4e9] to-[#ffe3c7] pb-24">
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center" aria-hidden="true">
-          <div
-            className="h-[72vw] max-h-[1100px] w-[72vw] max-w-[1100px] rounded-full bg-[radial-gradient(circle_at_center,rgba(249,115,22,0.32),rgba(249,115,22,0)_65%)] blur-3xl"
-            style={{ animation: "pulseGlow 12s ease-in-out infinite" }}
-          />
-        </div>
-        <div className="morph-blob morph-blob--sunset" aria-hidden="true" />
+  const handleDisconnectGoogle = async () => {
+    try {
+      await disconnectGoogle();
+      setAuthStatus({ connected: false, email: null });
+      setGoogleCalendarEmbedUrl(DEMO_CAL_URL);
+      setCalendarRefreshKey((prev) => prev + 1);
+    } catch {
+      // Keep logout non-blocking in the prototype.
+    }
+  };
 
-        <div className="relative mx-auto px-6 py-4 lg:py-8">
-          <header className="flex items-center justify-between gap-4 rounded-full bg-white/70 px-16 py-2 shadow-sm backdrop-blur">
-            <div className="flex items-center gap-2">
-              <div className="h-11 w-11 rounded-full bg-[url('/SS_logo.png')] bg-cover bg-center bg-no-repeat shadow-lg ring-4 ring-white/70" />
-              <div>
-                <p className="m-0 text-2xl font-semibold text-black">
-                  SemesterSync{" "}
-                  <span className="text-xs text-gray-400">[TOOL]</span>
-                </p>
-              </div>
-            </div>
-            <div className="gap-4">
-              <button className={`${ghostButton} border border-gray-700`}>
-                Log in
-              </button>
-              <button className="inline-flex items-center rounded-full bg-black px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-[1px]">
-                Sign Up
-              </button>
-            </div>
-          </header>
+  const pageProps: AppPageProps = {
+    selectedFiles,
+    course,
+    coursesVersion,
+    loading,
+    error,
+    authStatus,
+    connectError,
+    googleCalendarEmbedUrl,
+    calendarRefreshKey,
+    isSyncing,
+    syncMessage,
+    planStatus,
+    navigate,
+    handleFileChange,
+    removeFile,
+    handleUpload,
+    handleSync,
+    handleConnectGoogle,
+    handleDisconnectGoogle,
+    setCourse,
+    refreshPlan,
+  };
 
-            <div className="w-full py-6 flex flex-col items-center text-center mt-20 p-36 gap-10 lg:grid-cols-[1.05fr_0.95fr]">
-              <div className="space-y-7">
-                <div className="text-center inline-flex items-center gap-2 rounded-full bg-white/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-orange-700 shadow-sm backdrop-blur">
-                  AI semester co-pilot
-                </div>
-                <h1 className="m-0 text-4xl font-extrabold leading-tight text-slate-900 sm:text-6xl text-center">
-                  Plan your semester in
-                  <br />
-                  <span className="underline">one</span> click
-                </h1>
-                <p className="m-0 max-w-xl text-md text-slate-600 mx-auto text-center">
-                  Auto-sync syllabi to calendars.
-                </p>
-            </div>
+  if (pathname === "/signup") return <SignupPage navigate={navigate} />;
+  if (pathname === "/login") return <LoginPage navigate={navigate} />;
+  if (pathname === "/dashboard") return <DashboardPage {...pageProps} />;
+  if (pathname === "/upload") return <UploadPage {...pageProps} />;
+  if (pathname === "/calendar") return <CalendarPage {...pageProps} />;
+  if (pathname === "/assistant") return <AssistantPage {...pageProps} />;
+  if (pathname === "/billing") return <BillingPage {...pageProps} />;
 
-            <div className="relative w-2/3 max-w-[660px]">
-              <div className="absolute -top-4 -left-6 h-20 w-20 rounded-full border border-orange-200/70 bg-white/60 backdrop-blur" />
-              <div className="absolute -bottom-8 -right-10 h-24 w-24 rounded-full border border-orange-200/70 bg-white/60 backdrop-blur" />
-              <div className="relative flex flex-col rounded-2xl border border-gray-200 bg-white/90 p-6 shadow-xl backdrop-blur-lg">
-                <div className="flex items-start gap-3">
-                  <div>
-                    <p className="m-0 mt-1 text-sm text-gray-600">
-                      Drag your course outline here and we will detect lectures,
-                      exams, and labs automatically.
-                    </p>
-                  </div>
-                </div>
+  const courseReviewMatch = pathname.match(/^\/courses\/([^/]+)\/review$/);
+  if (courseReviewMatch) {
+    return <CourseReviewPage {...pageProps} courseId={courseReviewMatch[1]} />;
+  }
 
-                <label className="group mt-4 flex flex-1 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-orange-200 bg-gradient-to-r from-white to-[#fff7ed] px-6 py-6 text-center transition hover:border-orange-400 hover:shadow-[0_12px_30px_rgba(249,115,22,0.15)]">
-                  <input
-                    id="hero-upload"
-                    type="file"
-                    multiple
-                    accept="application/pdf"
-                    onChange={handleFileChange}
-                    className="hidden"
-                  />
-                  <div className="h-11 w-11  bg-[url('/SS_logo.png')] bg-cover bg-center bg-no-repeat " />
-                  <p className="mt-3 text-base font-semibold leading-snug text-slate-900">
-                    {selectedFiles.length === 0
-                      ? "Drop PDFs or click to browse (max 2)"
-                      : selectedFiles.length === 1
-                      ? selectedFiles[0].name
-                      : `${selectedFiles.length} PDFs selected`}
-                  </p>
-                  <div className="mt-3">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        document.getElementById("hero-upload")?.click();
-                      }}
-                      className={'inline-flex items-center rounded-full bg-black px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-[1px]'}
-                    >
-                      Choose files
-                    </button>
-                  </div>
-                  {selectedFiles.length === 0 ? (
-                    <div className="mt-3 flex flex-wrap justify-center gap-2">
-                      <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-orange-700 ring-1 ring-orange-200">
-                        Drag & drop
-                      </span>
-                      <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-orange-700 ring-1 ring-orange-200">
-                        PDF syllabus
-                      </span>
-                      <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-orange-700 ring-1 ring-orange-200">
-                        Auto parsing
-                      </span>
-                    </div>
-                  ) : (
-                    <p className="mt-3 text-xs font-semibold uppercase tracking-[0.12em] text-orange-700">
-                      Manage your PDFs below
-                    </p>
-                  )}
-                </label>
-                <div className="mt-5 flex items-end justify-between gap-3">
-                  {selectedFiles.length > 0 && (
-
-                      <div className="flex justify-end gap-2">
-                        {selectedFiles.map((file, idx) => (
-                          <div
-                            key={file.name + file.lastModified}
-                            className="group relative flex min-w-[170px] items-center gap-2 rounded-xl border border-orange-100 bg-white px-3 py-2 shadow-sm transition hover:-translate-y-[1px] hover:shadow-md"
-                          >
-                            <div className="flex h-10 w-8 items-center justify-center rounded-md bg-orange-100 text-[0.75rem] font-semibold uppercase text-orange-700">
-                              PDF
-                            </div>
-                            <div className="min-w-0">
-                              <p
-                                className="m-0 truncate text-[0.9rem] font-semibold text-slate-900"
-                                title={file.name}
-                              >
-                                {file.name}
-                              </p>
-                              <p className="m-0 text-[0.72rem] text-gray-500">PDF</p>
-                            </div>
-                            <button
-                              type="button"
-                              className="absolute -right-2 -top-2 inline-flex h-6 w-6 items-center justify-center rounded-full bg-white text-[0.78rem] font-bold text-gray-500 shadow ring-1 ring-gray-200 transition hover:bg-red-50 hover:text-red-600"
-                              onClick={() => removeFile(idx)}
-                            >
-                              ×
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                  )}
-
-                  <button
-                    onClick={handleUpload}
-                    disabled={!selectedFiles.length || loading}
-                    className="inline-flex h-11 w-11 items-center justify-center rounded-[12px] bg-[#f4b184] text-xl font-semibold text-white shadow-[0_10px_30px_rgba(249,115,22,0.25)] transition hover:-translate-y-[1px] hover:shadow-[0_12px_34px_rgba(249,115,22,0.3)] disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none"
-                    aria-label="Upload syllabus"
-                    title={loading ? "Processing syllabus..." : "Upload syllabus"}
-                  >
-                    {loading ? (
-                      <span className="text-sm leading-none">...</span>
-                    ) : (
-                      <span className="leading-none">↑</span>
-                    )}
-                  </button>
-                </div>
-              </div>
-            </div>
-                          {/* <div className="flex justify-between">
-                <button
-                  className="inline-flex items-center rounded-full bg-black px-5 py-2.5 text-sm font-semibold text-white shadow-[0_12px_28px_rgba(0,0,0,0.24)] transition hover:-translate-y-[1px]"
-                  onClick={() =>
-                    document
-                      .querySelector("#planner")
-                      ?.scrollIntoView({ behavior: "smooth" })
-                  }
-                >
-                  Start planning now â†’
-                </button>
-                <button
-                  className="inline-flex items-center rounded-full border border-gray-300 bg-white px-5 py-2.5 text-sm font-semibold text-gray-900 transition hover:bg-gray-100"
-                  onClick={() =>
-                    document
-                      .querySelector("#planner")
-                      ?.scrollIntoView({ behavior: "smooth" })
-                  }
-                >
-                  How it works
-                </button>
-              </div> */}
-          </div>
-        </div>
-        <div
-          className="pointer-events-none absolute flex flex-col items-end gap-2 max-w-[260px] text-slate-900 max-[900px]:hidden"
-          style={{ top: "65%", right: "76%", transform: "translateY(-50%)" }}
-        >
-          <div className="relative flex items-center gap-3 pr-2">
-            <div className="flex h-24 w-24 items-center justify-center rounded-full border border-slate-200 bg-[#f6fcf5] shadow-[0_14px_45px_rgba(15,23,42,0.15)]">
-              <p className="m-0 text-center text-sm leading-snug text-gray-700">
-                Drop
-                <br />
-                course file
-              </p>
-            </div>
-            <div
-              className="relative flex items-center"
-              style={{ animation: "floatYou 4.8s ease-in-out infinite" }}
-            >
-              <LiaLocationArrowSolid
-                className="absolute -left-4 top-1/2 -translate-y-1/2 -rotate-90 text-slate-700 drop-shadow-sm"
-                size={14}
-                aria-hidden
-              />
-                            <span className="rounded-full bg-slate-800 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-white shadow-md">
-                You
-              </span>
-            </div>
-          </div>
-          <div className="mr-[66px] h-10 w-px border-r border-dashed border-slate-300 opacity-80" />
-          <div className="flex w-[260px] flex-col rounded-xl border border-slate-200 bg-white/95 p-3 shadow-[0_14px_45px_rgba(15,23,42,0.18)] backdrop-blur">
-            <div className="flex items-center justify-between text-sm font-semibold text-gray-600">
-              <span>Calendar Sync</span>
-            </div>
-            <div className="mt-3 h-2 w-full rounded-full bg-slate-200">
-              <div className="h-full w-[95%] rounded-full bg-orange-400 shadow-[0_4px_10px_rgba(249,115,22,0.45)]" />
-            </div>
-          </div>
-        </div>
-
-        <div
-          className="pointer-events-none absolute flex flex-col items-start gap-2 max-w-[240px] text-slate-900 max-[900px]:hidden"
-          style={{ top: "35%", left: "76%", transform: "translateY(-50%)" }}
-        >
-          <div className="relative flex items-start gap-6 pl-2">
-            <div className="flex h-24 w-24 items-center justify-center rounded-full border border-slate-300 bg-[#f6fcf5] shadow-[0_14px_45px_rgba(15,23,42,0.15)]">
-              <p className="m-0 text-center text-sm leading-snug text-slate-700">
-                Sync
-                <br />
-                Calendar
-              </p>
-            </div>
-            <div
-              className="absolute left-[88px] -bottom-2 flex items-center"
-              style={{ animation: "floatAiTag 4.4s ease-in-out infinite" }}
-            >
-              <span className="rounded-full bg-orange-500 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-white shadow-md">
-                AI
-              </span>
-              <LiaLocationArrowSolid
-                className="absolute -left-3 -top-3 -rotate-45 text-orange-400 drop-shadow-sm"
-                size={14}
-                aria-hidden
-              />
-            </div>
-          </div>
-          <div className="ml-[74px] h-[1px] w-28 -rotate-8 border-t border-dashed border-slate-300 opacity-80 origin-left" />
-          <div className="flex w-[220px] flex-col rounded-xl border border-slate-200 bg-white/95 p-3 shadow-[0_14px_45px_rgba(15,23,42,0.18)] backdrop-blur">
-            <div className="flex items-center justify-between text-sm font-semibold text-gray-700">
-              <span>Calendar</span>
-            </div>
-            <div className="mt-3 space-y-2">
-              <div className="flex items-center gap-2 text-[13px] text-slate-600">
-                <span className="h-3 w-3 rounded-full bg-[#ef4444]" />
-                <span className="h-2 w-28 rounded-full bg-slate-200" />
-              </div>
-              <div className="flex items-center gap-2 text-[13px] text-slate-600">
-                <span className="h-3 w-3 rounded-full bg-[#f97316]" />
-                <span className="h-2 w-28 rounded-full bg-slate-200" />
-              </div>
-              <div className="flex items-center gap-2 text-[13px] text-slate-600">
-                <span className="h-3 w-3 rounded-full bg-[#334155]" />
-                <span className="h-2 w-24 rounded-full bg-slate-200" />
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section id="planner" className="px-6 py-12 lg:py-16">
-        <div className="mx-auto max-w-[1150px]">
-          <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="m-0 text-xs font-semibold uppercase tracking-[0.2em] text-orange-700">
-                Live demo
-              </p>
-              <h2 className="m-0 text-2xl font-semibold text-slate-900">
-                Turn a syllabus into a synced calendar
-              </h2>
-              <p className="m-0 mt-1 text-sm text-gray-600">
-                Upload a PDF, review parsed events, and push to Google or
-                Outlook.
-              </p>
-            </div>
-            <button
-              className={`${ghostButton} border border-gray-300`}
-              onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-            >
-              Back to top
-            </button>
-          </div>
-
-          <div className="grid w-full max-w-[1120px] grid-cols-[minmax(0,1.05fr)_minmax(0,1.1fr)] overflow-hidden rounded-[18px] bg-white shadow-[0_24px_70px_rgba(15,23,42,0.2)] max-[900px]:grid-cols-1">
-            <div className={`${panelPadding} bg-white`}>
-              <header className="mb-7 flex items-center gap-4">
-                <div className="relative h-[60px] w-[60px] shrink-0 rounded-full bg-[url('/SS_logo.png')] bg-cover bg-center bg-no-repeat" />
-                <div>
-                  <h3 className="m-0 text-xl font-semibold tracking-tight text-slate-900">
-                    Upload & review
-                  </h3>
-                  <p className="mt-1 text-sm text-gray-500">
-                    Drag in your syllabus and confirm the detected schedule.
-                  </p>
-                </div>
-              </header>
-
-              <section className={`${cardBase} bg-gray-50`}>
-                <div className="mb-4 flex items-start gap-3">
-                  <span className={stepPill}>1</span>
-                  <div>
-                    <h4 className="m-0 text-base font-semibold text-slate-900">
-                      Upload course outline
-                    </h4>
-                    <p className="mt-1 text-sm text-gray-500">
-                      We will parse dates, times, and locations from your PDF.
-                      You can review everything before syncing.
-                    </p>
-                  </div>
-                </div>
-
-                <label className={fileDropClasses}>
-                  <input
-                    id="planner-upload"
-                    type="file"
-                    multiple
-                    accept="application/pdf"
-                    onChange={handleFileChange}
-                    className="hidden"
-                  />
-                  <div className="flex items-center gap-3">
-                    <div
-                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-orange-500 text-xl text-white"
-                      aria-hidden="true"
-                    >
-                      ðŸ“„
-                    </div>
-                    <div>
-                      <p className="m-0 text-base font-medium leading-snug text-slate-900">
-                        {selectedFiles.length === 0
-                          ? "Drop PDFs here or click to browse (max 2)"
-                          : selectedFiles.length === 1
-                          ? selectedFiles[0].name
-                          : `${selectedFiles.length} PDFs selected`}
-                      </p>
-                      <p className="mt-1 text-sm text-gray-500">
-                        PDF syllabi - usually provided by your instructor. Up to
-                        2 at a time.
-                      </p>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          document.getElementById("planner-upload")?.click();
-                        }}
-                        className={`${primaryButton} mt-2 px-4 py-2 text-sm`}
-                      >
-                        Choose files
-                      </button>
-                    </div>
-                  </div>
-                </label>
-
-                {selectedFiles.length > 0 && (
-                  <div className="mt-3 grid grid-cols-2 gap-3 max-[640px]:grid-cols-1">
-                    {selectedFiles.map((file, idx) => (
-                      <div
-                        key={file.name + file.lastModified}
-                        className="group relative flex items-center gap-3 rounded-xl border border-orange-100 bg-white px-3 py-2 shadow-sm transition hover:-translate-y-[1px] hover:shadow-md"
-                      >
-                        <div className="flex h-12 w-10 items-center justify-center rounded-md bg-orange-100 text-[0.75rem] font-semibold uppercase text-orange-700">
-                          PDF
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p
-                            className="m-0 truncate text-sm font-semibold text-slate-900"
-                            title={file.name}
-                          >
-                            {file.name}
-                          </p>
-                          <p className="m-0 text-[0.72rem] text-gray-500">
-                            PDF file
-                          </p>
-                        </div>
-                        <button
-                          type="button"
-                          className="absolute -right-2 -top-2 inline-flex h-7 w-7 items-center justify-center rounded-full bg-white text-sm font-bold text-gray-500 shadow ring-1 ring-gray-200 transition hover:bg-red-50 hover:text-red-600"
-                          onClick={() => removeFile(idx)}
-                        >
-                          Ã—
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                <div className="mt-3 flex flex-wrap items-center gap-2.5">
-                  <button
-                    onClick={handleUpload}
-                    disabled={!selectedFiles.length || loading}
-                    className={primaryButton}
-                  >
-                    {loading ? "Processing syllabus..." : "Upload"}
-                  </button>
-                  {selectedFiles.length > 0 && !loading && !course && (
-                    <p className="text-xs text-gray-500">
-                      Ready when you are. Click <strong>Upload</strong> to
-                      continue.
-                    </p>
-                  )}
-                  {selectedFiles.length > 1 && (
-                    <p className="text-[0.78rem] text-gray-500">
-                      We will upload the first file for now; full multi-file
-                      processing is coming soon.
-                    </p>
-                  )}
-                </div>
-
-                {error && <p className="mt-2 text-sm text-red-700">{error}</p>}
-              </section>
-
-              <section className={`${cardBase} bg-gray-50`}>
-                <div className="mb-4 flex items-start gap-3">
-                  <span className={stepPill}>2</span>
-                  <div>
-                    <h4 className="m-0 text-base font-semibold text-slate-900">
-                      Review parsed events
-                    </h4>
-                    <p className="mt-1 text-sm text-gray-500">
-                      Check that the schedule below matches your course outline
-                      before sending it to Google or Outlook.
-                    </p>
-                  </div>
-                </div>
-
-                {course ? (
-                  <>
-                    <div className="mb-3 flex items-center justify-between gap-3">
-                      <div>
-                        <p className="m-0 text-sm font-semibold text-gray-900">
-                          {course.code ?? "Untitled course"}
-                        </p>
-                        {course.name && (
-                          <p className="mt-[0.1rem] text-sm text-gray-600">
-                            {course.name}
-                          </p>
-                        )}
-                        {course.term && (
-                          <p className="mt-[0.12rem] text-xs text-gray-500">
-                            {course.term}
-                          </p>
-                        )}
-                      </div>
-                      <div className="flex flex-wrap justify-end gap-2">
-                        <span className={pill}>
-                          {totalEvents} event{totalEvents === 1 ? "" : "s"}
-                        </span>
-                        <span className={softPill}>
-                          {classEvents} classes Â· {examEvents} exams
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="mt-3 flex flex-wrap items-center justify-between gap-2.5">
-                      <button
-                        onClick={handleSync}
-                        disabled={isSyncing}
-                        className={primaryButton}
-                      >
-                        {isSyncing ? "Syncing..." : "Sync to Google Calendar"}
-                      </button>
-                      {syncMessage && (
-                        <span className="text-xs text-emerald-700">
-                          {syncMessage}
-                        </span>
-                      )}
-                    </div>
-
-                    <EventsTable events={course.events} />
-                  </>
-                ) : (
-                  <div className="pt-1">
-                    <h3 className="mb-1 text-sm font-semibold text-gray-900">
-                      No course uploaded yet
-                    </h3>
-                    <p className="m-0 text-[0.82rem] text-gray-500">
-                      Once you upload a syllabus, all detected lectures, labs,
-                      and exams will appear here so you can confirm the details.
-                    </p>
-                  </div>
-                )}
-              </section>
-            </div>
-
-            <aside
-              id="sync"
-              className={`${panelPadding} border-l border-gray-200 bg-gray-50 max-[900px]:border-l-0 max-[900px]:border-t`}
-            >
-              <div className={`${cardBase} bg-white`}>
-                <div className="mb-4 flex items-start gap-3">
-                  <span className={stepPill}>3</span>
-                  <div>
-                    <h4 className="m-0 text-base font-semibold text-slate-900">
-                      Calendar view & sync
-                    </h4>
-                    <p className="mt-1 text-sm text-gray-500">
-                      {authStatus.connected
-                        ? "This is your own Google Calendar. Any synced course will appear here alongside your other events."
-                        : "Connect Google or Outlook to see your real schedule and add course events in one click."}
-                    </p>
-                  </div>
-                </div>
-
-                {authStatus.connected && (
-                  <div className="mb-3 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      className={`${ghostButton} px-4 py-2 text-sm`}
-                      onClick={handleDisconnectGoogle}
-                    >
-                      Disconnect Google
-                    </button>
-                    <span className={pill}>Google connected</span>
-                  </div>
-                )}
-
-                <div className="relative h-[520px] overflow-hidden rounded-xl border border-gray-200 bg-white max-[640px]:h-[460px]">
-                  <iframe
-                    key={calendarRefreshKey}
-                    src={googleCalendarEmbedUrl}
-                    title="Google Calendar"
-                    className={`h-full w-full border-0 ${
-                      authStatus.connected
-                        ? ""
-                        : "pointer-events-none blur-[4px]"
-                    }`}
-                    scrolling="no"
-                  />
-
-                  {!authStatus.connected && (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/45 px-6 text-center text-white backdrop-blur-sm">
-                      <h3 className="text-lg font-semibold">
-                        Connect your calendar
-                      </h3>
-                      <p className="text-sm text-gray-100">
-                        Sign in with Google or Outlook so we can sync your
-                        course events and display them here.
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          onClick={handleConnectGoogle}
-                          className={primaryButton}
-                          type="button"
-                        >
-                          Connect Google
-                        </button>
-                        <button
-                          className={`${ghostButton} border border-gray-300 px-4 py-2 text-sm`}
-                        >
-                          Connect Outlook
-                        </button>
-                      </div>
-                      {connectError && (
-                        <p className="mt-2 text-sm text-red-200">
-                          {connectError}
-                        </p>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                <p className="mt-3 text-sm text-gray-500">
-                  {authStatus.connected
-                    ? "This is your Google Calendar. Any synced course will appear alongside your other events."
-                    : "We show a demo calendar by default. Connect Google or Outlook to see your real schedule."}
-                </p>
-              </div>
-
-              <div className="mt-4">
-                <CalendarAssistant />
-              </div>
-            </aside>
-          </div>
-        </div>
-      </section>
-    </div>
-  );
+  return <LandingPage {...pageProps} />;
 }
 
 export default App;
-
-
-
-
-
-

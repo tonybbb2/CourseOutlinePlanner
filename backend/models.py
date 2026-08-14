@@ -28,6 +28,8 @@ class Course(BaseModel):
     term: Optional[str] = None
     raw_outline_file_id: Optional[str] = None
     events: List[Event] = Field(default_factory=list)
+    reviewed: bool = False
+    synced: bool = False
 
 
 class AuthStatus(BaseModel):
@@ -44,6 +46,40 @@ class CalendarChatRequest(BaseModel):
     messages: List[ChatMessageIn]
 
 
+class EventUpdate(BaseModel):
+    title: Optional[str] = None
+    type: Optional[str] = None
+    start: Optional[datetime] = None
+    end: Optional[datetime] = None
+    location: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class CourseReviewUpdate(BaseModel):
+    reviewed: bool = True
+
+
+class PlanStatus(BaseModel):
+    plan: str = "free"
+    syllabus_upload_limit: int = 2
+    syllabus_uploads_used: int = 0
+    assistant_message_limit: int = 10
+    assistant_messages_used: int = 0
+    paid_features: List[str] = Field(
+        default_factory=lambda: [
+            "unlimited syllabi",
+            "study plan generation",
+            "conflict detection",
+            "extended assistant actions",
+            "multi-semester planning",
+        ]
+    )
+
+
 # In-memory stores
 COURSES: Dict[str, Course] = {}
 EVENTS: Dict[str, Event] = {}
+
+# Single-user prototype usage store. Replace with user-scoped database records
+# before launch.
+PLAN_STATUS = PlanStatus()

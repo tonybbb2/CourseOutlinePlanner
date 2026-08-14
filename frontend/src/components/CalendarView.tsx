@@ -1,140 +1,93 @@
-import { useState } from "react";
-import { addMonths, addWeeks, startOfToday } from "date-fns";
-import { BackendCourse } from "../api";
-import {
-  CalendarView as CalendarViewType,
-  mapBackendEventToCalendarEvent,
-  CalendarEvent,
-} from "../types/calendar";
-import { CalendarToolbar } from "./CalendarToolbar";
-import { CalendarGrid } from "./CalendarGrid";
-import { CalendarWeekView } from "./CalendarWeekView";
-import { EventDetailPopup } from "./EventDetailPopup";
+import type { BackendCourse, BackendEvent } from "../api";
+import { primaryButton, softPill } from "../ui";
 
 interface CalendarViewProps {
   course: BackendCourse | null;
   onExport?: (courseId: string) => void;
 }
 
+function formatDateTime(iso: string | null | undefined) {
+  if (!iso) return "No time";
+  return new Date(iso).toLocaleString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function sortEvents(events: BackendEvent[]) {
+  return [...events].sort(
+    (a, b) => new Date(a.start).getTime() - new Date(b.start).getTime()
+  );
+}
+
 export function CalendarView({ course, onExport }: CalendarViewProps) {
-  const [currentDate, setCurrentDate] = useState<Date>(startOfToday());
-  const [view, setView] = useState<CalendarViewType>("week");
-  const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
-
-  const events = course
-    ? course.events.map(mapBackendEventToCalendarEvent)
-    : [];
-
-  const handleNavigate = (direction: "prev" | "next" | "today") => {
-    if (direction === "today") {
-      setCurrentDate(startOfToday());
-    } else if (direction === "prev") {
-      setCurrentDate((prev) =>
-        view === "month" ? addMonths(prev, -1) : addWeeks(prev, -1)
-      );
-    } else {
-      setCurrentDate((prev) =>
-        view === "month" ? addMonths(prev, 1) : addWeeks(prev, 1)
-      );
-    }
-  };
-
-  const handleEventClick = (event: CalendarEvent) => {
-    setSelectedEvent(event);
-  };
-
-  const handleExport = () => {
-    if (course && onExport) {
-      onExport(course.id);
-    }
-  };
-
   if (!course) {
     return (
-      <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-gray-300 bg-white p-6 text-center text-gray-500">
-        <svg
-          className="h-12 w-12 text-gray-400"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-          <line x1="16" y1="2" x2="16" y2="6" />
-          <line x1="8" y1="2" x2="8" y2="6" />
-          <line x1="3" y1="10" x2="21" y2="10" />
-        </svg>
-        <h3 className="text-sm font-semibold text-slate-900">
-          No Course Selected
+      <div className="ai-panel rounded-2xl border-dashed p-6 text-center">
+        <h3 className="m-0 text-sm font-black text-black">
+          No course selected
         </h3>
-        <p className="m-0 text-sm text-gray-500">
-          Upload a course syllabus to see events on the calendar
-        </p>
-      </div>
-    );
-  }
-
-  if (events.length === 0) {
-    return (
-      <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-gray-300 bg-white p-6 text-center text-gray-500">
-        <svg
-          className="h-12 w-12 text-gray-400"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-          <line x1="16" y1="2" x2="16" y2="6" />
-          <line x1="8" y1="2" x2="8" y2="6" />
-          <line x1="3" y1="10" x2="21" y2="10" />
-        </svg>
-        <h3 className="text-sm font-semibold text-slate-900">
-          No Events Found
-        </h3>
-        <p className="m-0 text-sm text-gray-500">
-          This course has no scheduled events
+        <p className="m-0 mt-1 text-sm font-bold text-zinc-600">
+          Upload or review a course to preview its extracted schedule.
         </p>
       </div>
     );
   }
 
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-      <CalendarToolbar
-        currentDate={currentDate}
-        view={view}
-        onViewChange={setView}
-        onNavigate={handleNavigate}
-        onExport={onExport ? handleExport : undefined}
-      />
-
-      <div className="mt-4">
-        {view === "month" ? (
-          <CalendarGrid
-            currentDate={currentDate}
-            events={events}
-            onEventClick={handleEventClick}
-          />
-        ) : (
-          <CalendarWeekView
-            currentDate={currentDate}
-            events={events}
-            onEventClick={handleEventClick}
-          />
+    <section className="ai-panel overflow-hidden rounded-2xl">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b-[3px] border-black px-5 py-4">
+        <div>
+          <h2 className="m-0 text-xl font-black text-black">
+            {course.code || course.name || "Course schedule"}
+          </h2>
+          <p className="m-0 mt-1 text-sm font-bold text-zinc-600">
+            Local preview of extracted events.
+          </p>
+        </div>
+        {onExport && (
+          <button
+            type="button"
+            className={primaryButton}
+            onClick={() => onExport(course.id)}
+            disabled={!course.reviewed}
+            title={course.reviewed ? "Sync to Google" : "Review course first"}
+          >
+            Sync reviewed course
+          </button>
         )}
       </div>
 
-      {selectedEvent && (
-        <EventDetailPopup
-          event={selectedEvent}
-          onClose={() => setSelectedEvent(null)}
-        />
+      {!course.events.length ? (
+        <div className="px-5 py-8 text-sm font-bold text-zinc-700">
+          No schedule events were detected for this course.
+        </div>
+      ) : (
+        <div className="divide-y-[3px] divide-black">
+          {sortEvents(course.events).map((event) => (
+            <div
+              key={event.id}
+              className="grid gap-3 px-5 py-4 sm:grid-cols-[minmax(0,1fr)_180px_120px]"
+            >
+              <div className="min-w-0">
+                <h3 className="m-0 truncate text-sm font-black text-black">
+                  {event.title}
+                </h3>
+                <p className="m-0 mt-1 text-xs font-bold text-zinc-600">
+                  {event.location || "No location"}
+                </p>
+              </div>
+              <p className="m-0 text-sm font-bold text-orange-700">
+                {formatDateTime(event.start)}
+              </p>
+              <span className={softPill}>{event.type}</span>
+            </div>
+          ))}
+        </div>
       )}
-    </div>
+    </section>
   );
 }

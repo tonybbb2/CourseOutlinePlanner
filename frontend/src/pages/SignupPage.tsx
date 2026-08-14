@@ -1,113 +1,110 @@
 import { FaGoogle } from "react-icons/fa";
+import type { Navigate } from "../App";
+import { primaryButton } from "../ui";
 
-export function SignupPage() {
-  const handleGoogle = () => {
-    // Placeholder for real Google OAuth
-    alert("Google signup coming soon");
-  };
+type Props = {
+  navigate: Navigate;
+};
 
+export function SignupPage({ navigate }: Props) {
   return (
-    <div className="min-h-screen bg-[#fff8ee] text-slate-900">
-      <div className="relative mx-auto flex min-h-screen max-w-5xl flex-col items-center justify-center px-4 py-10 sm:px-6 lg:px-12">
-        <div className="pointer-events-none absolute inset-0 -z-10">
-          <div className="absolute left-1/2 top-1/3 h-[600px] w-[600px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(circle_at_center,rgba(249,115,22,0.18),rgba(249,115,22,0.04),transparent)] blur-3xl" />
-        </div>
-        <div className="flex w-full max-w-xl flex-col rounded-3xl border border-orange-100 bg-white/90 p-8 shadow-[0_24px_70px_rgba(15,23,42,0.12)] backdrop-blur sm:p-10">
+    <div className="ai-grid min-h-screen bg-white text-black">
+      <div className="mx-auto flex min-h-screen max-w-5xl flex-col items-center justify-center px-4 py-10 sm:px-6 lg:px-12">
+        <div className="ai-panel flex w-full max-w-xl flex-col rounded-2xl p-8 sm:p-10">
           <div className="mb-6">
-            <p className="m-0 text-sm font-semibold uppercase tracking-[0.22em] text-orange-600">
+            <p className="m-0 text-sm font-black uppercase tracking-[0.22em] text-orange-600">
               SemesterSync
             </p>
-            <h1 className="m-0 mt-1 text-3xl font-extrabold text-slate-900">
+            <h1 className="m-0 mt-1 text-4xl font-black text-black">
               Sign up
             </h1>
-            <p className="m-0 mt-2 text-sm text-gray-600">
-              Create an account to auto-sync syllabi to your calendar.
+            <p className="m-0 mt-2 text-sm font-bold text-zinc-700">
+              Create an account to save courses and sync syllabi to your
+              calendar.
             </p>
           </div>
 
           <button
             type="button"
-            onClick={handleGoogle}
-            className="inline-flex w-full items-center justify-center gap-3 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white shadow-md transition hover:-translate-y-[1px] hover:shadow-lg"
+            onClick={() => navigate("/dashboard")}
+            className="inline-flex w-full items-center justify-center gap-3 rounded-xl border-[3px] border-black bg-white px-4 py-3 text-sm font-black text-black shadow-[6px_6px_0_#111111] transition hover:-translate-y-[1px] hover:bg-orange-100"
           >
             <FaGoogle className="text-lg" />
             Continue with Google
           </button>
 
-          <div className="my-6 flex items-center gap-3 text-xs font-semibold uppercase tracking-[0.2em] text-gray-400">
-            <span className="h-px flex-1 bg-gray-200" />
+          <div className="my-6 flex items-center gap-3 text-xs font-black uppercase tracking-[0.2em] text-zinc-500">
+            <span className="h-[3px] flex-1 bg-black" />
             OR
-            <span className="h-px flex-1 bg-gray-200" />
+            <span className="h-[3px] flex-1 bg-black" />
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
-            <div className="flex flex-col gap-1">
-              <label className="text-sm font-semibold text-slate-800">
+            <label className="flex flex-col gap-1">
+              <span className="text-sm font-black text-black">
                 First name
-              </label>
+              </span>
               <input
                 type="text"
                 placeholder="Alex"
-                className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm shadow-inner transition focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100"
+                className="w-full rounded-xl border-[3px] border-black bg-white px-3 py-2.5 text-sm font-bold text-black placeholder:text-zinc-500 transition focus:border-orange-500 focus:outline-none"
               />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-sm font-semibold text-slate-800">
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-sm font-black text-black">
                 Last name
-              </label>
+              </span>
               <input
                 type="text"
                 placeholder="Park"
-                className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm shadow-inner transition focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100"
+                className="w-full rounded-xl border-[3px] border-black bg-white px-3 py-2.5 text-sm font-bold text-black placeholder:text-zinc-500 transition focus:border-orange-500 focus:outline-none"
               />
-            </div>
+            </label>
           </div>
 
-          <div className="mt-3 flex flex-col gap-1">
-            <label className="text-sm font-semibold text-slate-800">Email</label>
+          <label className="mt-3 flex flex-col gap-1">
+            <span className="text-sm font-black text-black">Email</span>
             <input
               type="email"
               placeholder="you@example.com"
-              className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm shadow-inner transition focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100"
+              className="w-full rounded-xl border-[3px] border-black bg-white px-3 py-2.5 text-sm font-bold text-black placeholder:text-zinc-500 transition focus:border-orange-500 focus:outline-none"
             />
-          </div>
+          </label>
 
-          <div className="mt-3 flex flex-col gap-1">
-            <label className="text-sm font-semibold text-slate-800">
+          <label className="mt-3 flex flex-col gap-1">
+            <span className="text-sm font-black text-black">
               Password
-            </label>
+            </span>
             <input
               type="password"
-              placeholder="••••••••"
-              className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm shadow-inner transition focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100"
+              placeholder="********"
+              className="w-full rounded-xl border-[3px] border-black bg-white px-3 py-2.5 text-sm font-bold text-black placeholder:text-zinc-500 transition focus:border-orange-500 focus:outline-none"
             />
-          </div>
+          </label>
 
           <button
             type="button"
-            className="mt-6 inline-flex items-center justify-center rounded-2xl bg-orange-500 px-4 py-3 text-sm font-semibold text-white shadow-[0_10px_30px_rgba(249,115,22,0.35)] transition hover:-translate-y-[1px] hover:bg-orange-600 hover:shadow-[0_12px_34px_rgba(249,115,22,0.4)]"
+            className={`${primaryButton} mt-6 justify-center rounded-lg py-3`}
+            onClick={() => navigate("/dashboard")}
           >
             Create an account
           </button>
 
-          <p className="mt-5 text-center text-sm text-gray-600">
+          <p className="mt-5 text-center text-sm font-bold text-zinc-700">
             Already have an account?{" "}
-            <a className="font-semibold text-orange-600 hover:underline" href="#">
+            <button
+              type="button"
+              className="font-black text-orange-600 hover:underline"
+              onClick={() => navigate("/login")}
+            >
               Sign in
-            </a>
+            </button>
           </p>
         </div>
 
-        <p className="mt-6 text-center text-xs text-gray-600">
-          By creating or entering an account, you agree to the{" "}
-          <a className="font-semibold text-orange-600 hover:underline" href="#">
-            Terms of Service
-          </a>{" "}
-          and{" "}
-          <a className="font-semibold text-orange-600 hover:underline" href="#">
-            Privacy Policy
-          </a>
-          .
+        <p className="mt-6 text-center text-xs font-bold text-zinc-600">
+          By creating an account, you agree to the Terms of Service and Privacy
+          Policy.
         </p>
       </div>
     </div>
